@@ -1,0 +1,17 @@
+*~
+*.pyc
+*.pyd
+*.csv
+*.so
+*.png
+*.swp
+*.pstats
+*.mod
+*.o
+.coverage
+coverage.xml
+build
+hyzarr.egg-info
+nosetests.xml
+junit
+tests/*.zip
