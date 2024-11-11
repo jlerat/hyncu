@@ -11,7 +11,7 @@ strategy:
       python.version: '3.10'
 
 variables:
-  CONDA_ENV_NAME: env_mini_v2
+  CONDA_ENV_NAME: env
   CONDA_HOME: /usr/share/miniconda/envs/$(CONDA_ENV_NAME)/
   BUILD_DIR: $(System.DefaultWorkingDirectory)
 
@@ -29,11 +29,11 @@ steps:
 - task: Cache@2
   displayName: Use cached Anaconda environment
   inputs:
-    key: conda | $(BUILD_DIR)/hyncu/env_mini_v2.yml
+    key: conda | $(BUILD_DIR)/hyncu/env.yml
     path: $(CONDA_HOME)
     cacheHitVar: CONDA_CACHE_RESTORED
 
-- bash: conda env create --file  $(BUILD_DIR)/hyncu/env_mini_v2.yml
+- bash: conda env create --file  $(BUILD_DIR)/hyncu/env.yml
   displayName: Create Anaconda environment (if not restored from cache)
   condition: eq(variables.CONDA_CACHE_RESTORED, 'false')
 
