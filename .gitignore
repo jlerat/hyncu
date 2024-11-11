@@ -11,7 +11,7 @@
 .coverage
 coverage.xml
 build
-hyzarr.egg-info
+hyncu.egg-info
 nosetests.xml
 junit
 tests/*.zip
