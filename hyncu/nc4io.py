@@ -136,6 +136,7 @@ class Variable():
         self.significant_digit = int(significant_digit)
         self.compression = compression
         self.fill_value = fill_value
+        self.chunksizes = chunksizes
         self.attrs = {} if attrs is None else attrs
 
 
@@ -143,6 +144,7 @@ class Variable():
         var = nc4dset.createVariable(varname=self.name, \
                             dimensions=self.dimensions, \
                             datatype=self.dtype, \
+                            chunksizes=self.chunksizes, \
                             least_significant_digit=self.significant_digit, \
                             compression=self.compression, \
                             fill_value=self.fill_value)
