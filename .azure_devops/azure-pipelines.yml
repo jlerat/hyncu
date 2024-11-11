@@ -25,7 +25,6 @@ steps:
   displayName: Add conda to PATH
 
 - checkout: self
-- checkout: hydrodiy
 
 - task: Cache@2
   displayName: Use cached Anaconda environment
