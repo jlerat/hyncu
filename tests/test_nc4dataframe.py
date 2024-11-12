@@ -22,8 +22,12 @@ def test_dataframe(allclose):
         variables = ["v1", "v2", "v3", "v4"]
         times = pd.date_range("1990-01-01", "2000-12-31", freq="D")
         dataname = "truc"
-        nc4dataframe.set_netcdf_file(nc, siteids=sites, \
-                    variables=variables, times=times, dataname=dataname)
+        units = ["mm.day-1", "m3.s-1", "degC", "kg"]
+        nc4dataframe.configure_netcdf_file(nc, siteids=sites, \
+                    variables=variables, \
+                    units=units, \
+                    times=times, \
+                    dataname=dataname)
 
         size = (len(sites), len(times), len(variables))
         nc[dataname][:] = np.random.uniform(-1, 1, size=size)

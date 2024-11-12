@@ -120,7 +120,8 @@ class Variable():
         cf_units.Unit(units)
         self.units = units
         self.dimensions = dimensions
-        self.significant_digit = int(significant_digit)
+        self.significant_digit = int(significant_digit)\
+                            if not significant_digit is None else None
         self.compression = compression
         self.fill_value = fill_value
         self.chunksizes = chunksizes
