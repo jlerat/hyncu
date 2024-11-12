@@ -31,19 +31,14 @@ def test_dimension(allclose):
         assert "time" in nc.dimensions
 
         lons = np.linspace(110, 140, 10)
-        ldim = nc4io.LatLongDimension(lons)
+        ldim = nc4io.CoordinateDimension(lons, "longitude")
         ldim.to_dataset(nc)
         assert "longitude" in nc.dimensions
 
         lats = np.linspace(-40, -10, 10)
-        ldim = nc4io.LatLongDimension(lats, False)
+        ldim = nc4io.CoordinateDimension(lats, "latitude")
         ldim.to_dataset(nc)
         assert "latitude" in nc.dimensions
-
-        sites = ["203013", "422310A"]
-        sdim = nc4io.SiteidDimension(sites)
-        sdim.to_dataset(nc)
-        assert "siteid" in nc.dimensions
 
 
     with Dataset(fnc, "r") as nc:
@@ -54,36 +49,50 @@ def test_dimension(allclose):
         diff = (tdim.values-times).seconds
         assert np.all(diff==0)
 
-        ldim = nc4io.LatLongDimension.from_dataset(nc)
+        ldim = nc4io.CoordinateDimension.from_dataset(nc, "longitude")
         assert allclose(ldim.values, lons)
 
-        ldim = nc4io.LatLongDimension.from_dataset(nc, False)
+        ldim = nc4io.CoordinateDimension.from_dataset(nc, "latitude")
         assert allclose(ldim.values, lats)
-
-        sdim = nc4io.SiteidDimension.from_dataset(nc)
-        assert np.all(sdim.values==sites)
 
     fnc.unlink()
 
 
-def test_add_dimensions(allclose):
-    fnc = FHERE / "test_add_dimension.nc"
+def test_add_known_dimensions(allclose):
+    fnc = FHERE / "test_add_known_dimension.nc"
     with Dataset(fnc, "w") as nc:
         times = pd.date_range("2001-01-01", "2010-12-01", freq="MS")
         lons = np.linspace(110, 140, 10)
         lats = np.linspace(-40, -10, 10)
-        nc4io.add_dimensions(nc, times, lons, lats)
+        nc4io.add_dimensions(nc, time=times, longitude=lons, latitude=lats)
 
     with Dataset(fnc, "r") as nc:
         tdim = nc4io.TimeDimension.from_dataset(nc)
         diff = (tdim.values-times).seconds
         assert np.all(diff==0)
 
-        ldim = nc4io.LatLongDimension.from_dataset(nc)
+        ldim = nc4io.CoordinateDimension.from_dataset(nc, "longitude")
         assert allclose(ldim.values, lons)
 
-        ldim = nc4io.LatLongDimension.from_dataset(nc, False)
+        ldim = nc4io.CoordinateDimension.from_dataset(nc, "latitude")
         assert allclose(ldim.values, lats)
+
+    fnc.unlink()
+
+
+def test_add_generic_dimensions(allclose):
+    fnc = FHERE / "test_add_generic_dimension.nc"
+    with Dataset(fnc, "w") as nc:
+        siteids = ["a", "b", "c", "d"]
+        variables = ["v1", "v2", "v3"]
+        nc4io.add_dimensions(nc, siteid=siteids, variable=variables)
+
+    with Dataset(fnc, "r") as nc:
+        dim = nc4io.Dimension.from_dataset(nc, "siteid")
+        assert np.all(dim.values==siteids)
+
+        dim = nc4io.Dimension.from_dataset(nc, "variable")
+        assert np.all(dim.values==variables)
 
     fnc.unlink()
 
@@ -93,7 +102,7 @@ def test_variable(allclose):
     with Dataset(fnc, "w") as nc:
         lons = np.linspace(110, 140, 10)
         lats = np.linspace(-40, -10, 10)
-        nc4io.add_dimensions(nc, lons=lons, lats=lats)
+        nc4io.add_dimensions(nc, longitude=lons, latitude=lats)
 
         attrs = {"comment": "bidule"}
         nvar = nc4io.Variable("bidule", ["latitude", "longitude"], \
@@ -110,5 +119,16 @@ def test_variable(allclose):
         assert v.units=="mm.month-1"
         d = v[:].filled()
         assert allclose(d, data, atol=1e-5, equal_nan=True)
+
+    fnc.unlink()
+
+
+def test_meta(allclose):
+    fnc = FHERE / "test_meta.nc"
+    with Dataset(fnc, "w") as nc:
+        nc4io.add_meta(nc, author="ma pomme")
+
+    with Dataset(fnc, "r") as nc:
+        assert nc.author == "ma pomme"
 
     fnc.unlink()

@@ -1,6 +1,5 @@
 """Utility functions to export netcdf files """
 import re, sys
-from collections import namedtuple
 import numpy as np
 import pandas as pd
 from datetime import datetime
@@ -77,46 +76,34 @@ class TimeDimension(Dimension):
         return dim
 
 
-class SiteidDimension(Dimension):
-    def __init__(self, values):
-        name = "siteid"
-        values = np.array(values)
-        dtype = values.dtype
-        units = "-"
-        super(SiteidDimension, self).__init__(name, values, dtype, units)
-
-    @classmethod
-    def from_dataset(cls, nc4dset):
-        return Dimension.from_dataset(nc4dset, "siteid")
-
-
-class LatLongDimension(Dimension):
-    def __init__(self, values, islon=True):
-        name = DIM_LON_NAME if islon else DIM_LAT_NAME
+class CoordinateDimension(Dimension):
+    def __init__(self, values, name):
+        assert name in [DIM_LON_NAME, DIM_LAT_NAME]
         values = np.array(values).astype(np.float64)
         dtype = np.float64
-        units = "degrees_east" if islon else "degrees_north"
-        super(LatLongDimension, self).__init__(name, values, dtype, units)
+        units = "degrees_east" if name==DIM_LON_NAME else "degrees_north"
+        super(CoordinateDimension, self).__init__(name, values, dtype, units)
 
     @classmethod
-    def from_dataset(cls, nc4dset, islon=True):
-        name = DIM_LON_NAME if islon else DIM_LAT_NAME
+    def from_dataset(cls, nc4dset, name):
+        assert name in [DIM_LON_NAME, DIM_LAT_NAME]
         return Dimension.from_dataset(nc4dset, name)
 
 
-def add_dimensions(ncdset, times=None, lons=None, lats=None):
-    if not times is None:
-        tdim = TimeDimension(times)
-        tdim.to_dataset(ncdset)
+def add_dimensions(ncdset, **kwargs):
+    for dname, values in kwargs.items():
+        if dname=="time":
+            tdim = TimeDimension(values)
+            tdim.to_dataset(ncdset)
 
-    if not lons is None:
-        ldim = LatLongDimension(lons)
-        ldim.to_dataset(ncdset)
+        elif dname in [DIM_LON_NAME, DIM_LAT_NAME]:
+            ldim = CoordinateDimension(values, dname)
+            ldim.to_dataset(ncdset)
 
-    if not lats is None:
-        ldim = LatLongDimension(lats, False)
-        ldim.to_dataset(ncdset)
-
+        else:
+            values = np.array(values)
+            dim = Dimension(dname, values, values.dtype, "-")
+            dim.to_dataset(ncdset)
 
 
 class Variable():
@@ -156,12 +143,17 @@ class Variable():
 
 
 
-def add_meta(nc4dset, summary=None, institution=None):
-    if summary is None:
-        ncdset.summary = "Data file created by CSIRO Environment"
+def add_meta(nc4dset, **kwargs):
+    if not "summary" in kwargs:
+        kwargs["summary"] = "Data file created by CSIRO Environment"
 
-    if institution is None:
-        ncdset.institution = "CSIRO Environment"
+    if not "institution" in kwargs:
+        kwargs["institution"] = "CSIRO Environment"
 
-    ncdset.date_created = str(datetime.now())
+    if not "date_created" in kwargs:
+        kwargs["date_created"] = str(datetime.now())
+
+    for key, value in kwargs.items():
+        setattr(nc4dset, key, value)
+
 
