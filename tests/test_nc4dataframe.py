@@ -37,12 +37,28 @@ def test_dataframe(allclose):
         assert f"{dataname}{SEP}variable{SEP}units" in nc.variables
         assert dataname in nc.variables
 
-        size = (len(stations), len(times), len(variables))
-        nc[dataname][:] = np.random.uniform(-1, 1, size=size)
+        size = (len(times), len(variables))
+        df = pd.DataFrame(np.random.uniform(-1, 1, size=size), \
+                                index=times, columns=variables)
+        nc4dataframe.set_dataframe(nc, "a", df, dataname)
+
+
+        size = (len(times)-10, len(variables)-2)
+        df2 = pd.DataFrame(np.random.uniform(-1, 1, size=size), \
+                index=times[:-10], columns=variables[:-2])
+        nc4dataframe.set_dataframe(nc, "b", df2, dataname)
+
 
     with Dataset(fnc, "r") as nc:
         df = nc4dataframe.get_data(nc, "a", dataname)
         assert df.shape == (len(times), len(variables))
+
+        df2 = nc4dataframe.get_dataframe(nc, "b", dataname, False)
+        assert df2.shape == (len(times), len(variables))
+        assert df2.iloc[:, 2:].isnull().all().all()
+
+        df2 = nc4dataframe.get_dataframe(nc, "b", dataname)
+        assert df2.shape == (len(times)-10, len(variables))
 
     fnc.unlink()
 
@@ -62,7 +78,6 @@ def test_stations(allclose):
         df.loc[:, "TRUC[-]"] = ["".join([letters[i] \
                                     for i in np.random.randint(0, 26, 10)]) \
                                         for s in stations]
-
         with pytest.raises(ValueError, match="LONGITUDE was expected"):
             nc4dataframe.set_station_data(nc, df)
 
