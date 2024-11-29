@@ -104,19 +104,25 @@ class CoordinateDimension(Dimension):
 
 
 def add_dimensions(ncdset: Dataset, **kwargs) -> None:
+    dims = {}
     for dname, values in kwargs.items():
         if dname=="time":
             tdim = TimeDimension(values)
             tdim.to_dataset(ncdset)
+            dims[dname] = tdim
 
         elif dname in [DIM_LONGITUDE_NAME, DIM_LATITUDE_NAME]:
             ldim = CoordinateDimension(values, dname)
             ldim.to_dataset(ncdset)
+            dims[dname] = ldim
 
         else:
             values = np.array(values)
             dim = Dimension(dname, values, values.dtype, "-")
             dim.to_dataset(ncdset)
+            dims[dname] = dim
+
+    return dims
 
 
 class Variable():
