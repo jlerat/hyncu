@@ -131,7 +131,7 @@ def add_variables(nc4dset: Dataset, \
 
 def select_types(df: pd.DataFrame, dlabel: str) -> pd.DataFrame:
     if dlabel == NUMERICAL_DATA_LABEL:
-        return df.select_dtypes(include="number")
+        return df.select_dtypes(include="number").astype(np.float32)
     elif dlabel == TEXT_DATA_LABEL:
         return df.select_dtypes(include=["object", "datetime"]).astype(str)
     else:

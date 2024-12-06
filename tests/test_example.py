@@ -63,7 +63,6 @@ def test_example(allclose):
 
         # Configure netcdf file
         dataset_name = "important_dataframe_stuff"
-        print(grp)
         nc4dataframe.add_variables(grp, \
                     stationids=stationids, \
                     variables=variables, \
@@ -74,14 +73,14 @@ def test_example(allclose):
         # store data for each station
         for stationid in stationids:
             data  = np.random.uniform(0, 1, (len(times), len(variables)))
-            nc4dataframe.set_data(grp, stationid, data, dataset_name)
+            nc4dataframe.set_data(grp, dataset_name, stationid, data)
 
         # Retrieve station meta data
         df = nc4dataframe.get_station_data(grp)
 
         # Retrieve station data
         for stationid in stationids:
-            d = nc4dataframe.get_data(grp, stationid, dataset_name)
+            d = nc4dataframe.get_data(grp, dataset_name, stationid)
 
     fnc.unlink()
 
