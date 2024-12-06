@@ -14,6 +14,15 @@ import warnings
 
 FHERE = Path(__file__).resolve().parent
 
+def test_num2date(allclose):
+    t = pd.date_range("1850-01-01", "2100-12-31", freq="MS")
+    n = nc4io.date2num(t)
+    t2 = nc4io.num2date(n)
+    assert allclose(t.astype(np.int64), t2.astype(np.int64))
+
+    n2 = nc4io.date2num(t2)
+    assert allclose(n, n2)
+
 
 def test_dimension(allclose):
     fnc = FHERE / "test_dimension.nc"

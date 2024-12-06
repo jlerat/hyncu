@@ -1,5 +1,6 @@
 """Utility functions to export netcdf files """
 from __future__ import annotations
+from typing import Optional
 import re, sys
 from getpass import getuser
 import numpy as np
@@ -21,7 +22,7 @@ DIM_LATITUDE_NAME = "latitude"
 DIM_TIME_NAME = "time"
 
 
-def num2date(nums: np.ndarray, units:str) -> pd.DatetimeIndex:
+def num2date(nums: np.ndarray, units: Optional[str] = TIME_UNITS) -> pd.DatetimeIndex:
     """ Function to convert numerical time indexes to pandas
     DatetimeIndex. The function ensures that cftime datetime
     type are not used.
@@ -33,6 +34,16 @@ def num2date(nums: np.ndarray, units:str) -> pd.DatetimeIndex:
         nums = netCDF4.num2date(nums, units)
 
     return pd.to_datetime(nums)
+
+
+def date2num(times: pd.DatetimeIndex) -> np.ndarray:
+    """ Function to convert pandas datetime to numerical
+    values.
+    """
+    times = times.to_pydatetime()
+    nums = netCDF4.date2num(times, TIME_UNITS)
+    return nums
+
 
 
 class Dimension():

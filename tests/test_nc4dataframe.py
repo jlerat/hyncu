@@ -42,9 +42,25 @@ def test_dataframe(allclose):
                                 index=times, columns=variables)
         nc4dataframe.set_data(nc, "a", df, dataname)
 
+        # Set partial dataset
+        df2 = df.iloc[:len(df)//2, :2]
+        nc4dataframe.set_data(nc, "b", df2, dataname)
+
+
     with Dataset(fnc, "r") as nc:
         df = nc4dataframe.get_data(nc, "a", dataname)
         assert df.shape == (len(times), len(variables))
+
+        df3 = nc4dataframe.get_data(nc, "b", dataname)
+        assert df3.shape == (len(times), len(variables))
+
+        coln = nc4dataframe.get_dataset_column_names(nc, dataname)
+        for icn, cn in enumerate(coln):
+            v = df3.loc[df2.index[-1]:, cn].iloc[1:]
+            assert v.isnull().all()
+
+            if icn>=2:
+                assert df3.loc[:, cn].isnull().all()
 
     fnc.unlink()
 
