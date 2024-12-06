@@ -204,7 +204,7 @@ def set_station_ids(nc4dset: Dataset, stations: pd.DataFrame) -> None:
         dim = nc4io.Dimension("stationid", stationids, stationids.dtype, "-")
         dim.to_dataset(nc4dset)
     else:
-        if not stationids == nc4dset["stationid"][:]:
+        if not np.all(stationids == nc4dset["stationid"][:]):
             errmess = f"Station IDs should be identical to the one "\
                         "stored in the 'stationid' dimension"
             raise ValueError(errmess)
