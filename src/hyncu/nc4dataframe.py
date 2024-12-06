@@ -253,7 +253,7 @@ def set_data(nc4dset: Dataset, \
         times = nc4io.date2num(data.index)
         itimes_nc, itimes_data = get_item_index_from_dimension(nc4dset, "time",\
                                                                 times)
-        variables = data.columns.values
+        variables = [re.sub("\\[.*", "", cn) for cn in data.columns.values]
         vname = data_variable_name(dataset_name)
         ivars_nc, ivars_data = get_item_index_from_dimension(nc4dset, vname,\
                                                                 variables)

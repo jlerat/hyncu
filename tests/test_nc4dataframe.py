@@ -38,8 +38,9 @@ def test_dataframe(allclose):
         assert dataname in nc.variables
 
         size = (len(times), len(variables))
+        cols = [f"{v}[{u}]" for v, u in zip(variables, units)]
         df = pd.DataFrame(np.random.uniform(-1, 1, size=size), \
-                                index=times, columns=variables)
+                                index=times, columns=cols)
         nc4dataframe.set_data(nc, dataname, "a", df)
 
         # Set partial dataset
