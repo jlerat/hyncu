@@ -15,7 +15,7 @@ import warnings
 
 FHERE = Path(__file__).resolve().parent
 
-SEP = nc4dataframe.NAME_SEPARATOR
+SEP = nc4dataframe.LABEL_SEPARATOR
 
 def test_dataframe(allclose):
     fnc = FHERE / "test_dataframe.nc"
@@ -40,18 +40,26 @@ def test_dataframe(allclose):
         size = (len(times), len(variables))
         df = pd.DataFrame(np.random.uniform(-1, 1, size=size), \
                                 index=times, columns=variables)
-        nc4dataframe.set_data(nc, "a", df, dataname)
+        nc4dataframe.set_data(nc, dataname, "a", df)
 
         # Set partial dataset
         df2 = df.iloc[:len(df)//2, :2]
-        nc4dataframe.set_data(nc, "b", df2, dataname)
+        nc4dataframe.set_data(nc, dataname, "b", df2)
+
+        # Set numpy array
+        v = df.values.copy()
+        nc4dataframe.set_data(nc, dataname, "c", v)
+
+        with pytest.raises(ValueError, match="Expected data of size"):
+            v = df2.values.copy()
+            nc4dataframe.set_data(nc, dataname, "c", v)
 
 
     with Dataset(fnc, "r") as nc:
-        df = nc4dataframe.get_data(nc, "a", dataname)
+        df = nc4dataframe.get_data(nc, dataname, "a")
         assert df.shape == (len(times), len(variables))
 
-        df3 = nc4dataframe.get_data(nc, "b", dataname)
+        df3 = nc4dataframe.get_data(nc, dataname, "b", clip=False)
         assert df3.shape == (len(times), len(variables))
 
         coln = nc4dataframe.get_dataset_column_names(nc, dataname)
@@ -61,6 +69,9 @@ def test_dataframe(allclose):
 
             if icn>=2:
                 assert df3.loc[:, cn].isnull().all()
+
+        df4 = nc4dataframe.get_data(nc, dataname, "b")
+        assert df4.shape == df2.shape
 
     fnc.unlink()
 

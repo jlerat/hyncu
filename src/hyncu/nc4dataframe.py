@@ -11,14 +11,13 @@ from netCDF4 import Dataset
 
 from hyncu import nc4io
 
-DEFAULT_DATASET_NAME = "data"
 STATION_DATASET_NAME = "stations"
 EXPECTED_STATIONS_COLUMNS = ["NAME", "LONGITUDE", "LATITUDE"]
 
 TEXT_DATA_LABEL = "text"
 NUMERICAL_DATA_LABEL = "numerical"
 
-NAME_SEPARATOR = "#"
+LABEL_SEPARATOR = "#"
 
 def validate_units(units: list) -> None:
     for unit in units:
@@ -37,20 +36,21 @@ def get_item_index_from_dimension(nc4dset: Dataset, \
         raise ValueError(errmess)
 
     dim = nc4dset[dimension_name][:]
-    idx = np.in1d(dim, items)
-    if idx.sum() == 0:
+    _, idx_nc, idx_data = np.intersect1d(dim, items, return_indices=True)
+
+    if len(idx_nc)==0 or len(idx_data)==0:
         errmess = f"No items found in dimension {dimension_name}."
         raise ValueError(errmess)
 
-    return np.where(idx)[0]
+    return idx_nc, idx_data
 
 
 def data_variable_name(dataset_name):
-    return f"{dataset_name}{NAME_SEPARATOR}variable"
+    return f"{dataset_name}{LABEL_SEPARATOR}variable"
 
 
 def station_data_name(dlabel):
-    return f"{STATION_DATASET_NAME}{NAME_SEPARATOR}{dlabel}_data"
+    return f"{STATION_DATASET_NAME}{LABEL_SEPARATOR}{dlabel}_data"
 
 
 def station_data_variable_name(dlabel):
@@ -58,17 +58,26 @@ def station_data_variable_name(dlabel):
 
 
 def data_unit_name(dataset_name):
-    return f"{dataset_name}{NAME_SEPARATOR}variable"\
-            +f"{NAME_SEPARATOR}units"
+    return f"{dataset_name}{LABEL_SEPARATOR}variable"\
+            +f"{LABEL_SEPARATOR}units"
 
 
 def station_data_unit_name(dlabel):
     return data_unit_name(station_data_name(dlabel))
 
 
+def read_from_nc(nc4dset: Dataset, variable_name):
+    if not variable_name in nc4dset.variables:
+        errmess = f"{variable_name} was not found in variables."\
+                    +" Make sure the function nc4dataframe.add_variables"\
+                    +" has been run."
+        raise ValueError(errmess)
+    return nc4dset[variable_name][:]
+
+
 def get_dataset_column_names(nc4dset:Dataset, dataset_name: str):
-    varnames = nc4dset[data_variable_name(dataset_name)][:]
-    units = nc4dset[data_unit_name(dataset_name)][:]
+    varnames = read_from_nc(nc4dset, data_variable_name(dataset_name))
+    units = read_from_nc(nc4dset, data_unit_name(dataset_name))
     colnames = []
     for v, u in zip(varnames, units):
         cn = f"{v}[{u}]"
@@ -77,11 +86,11 @@ def get_dataset_column_names(nc4dset:Dataset, dataset_name: str):
 
 
 def add_variables(nc4dset: Dataset, \
+                    dataset_name: str, \
                     stationids: list, \
                     variables: list, \
                     times: list,\
                     units: Optional[str] = None, \
-                    dataset_name: Optional[str] = DEFAULT_DATASET_NAME, \
                     attrs: Optional[dict] = None):
     # Create dimensions
     kw = {data_variable_name(dataset_name): variables}
@@ -223,54 +232,62 @@ def get_station_data(nc4dset: Dataset):
     stationids = nc4dset["stationid"][:]
     for dlabel in [NUMERICAL_DATA_LABEL, TEXT_DATA_LABEL]:
         dset = station_data_name(dlabel)
-        info = nc4dset[dset][:]
+        info = read_from_nc(nc4dset, dset)
         colnames = get_dataset_column_names(nc4dset, dset)
         df.append(pd.DataFrame(info, index=stationids, columns=colnames))
     return pd.concat(df, axis=1)
 
 
-def set_data(nc4dset, stationid, data, dataset_name=DEFAULT_DATASET_NAME):
-    istation = get_item_index_from_dimension(nc4dset, "stationid", stationid)
+def set_data(nc4dset: Dataset, \
+                dataset_name: str, \
+                stationid: str, \
+                data: pd.DataFrame):
+    istation, _ = get_item_index_from_dimension(nc4dset, "stationid",\
+                                                    [stationid])
     istation = istation[0]
 
     nsites, ntimes, nvars = nc4dset[dataset_name].shape
 
-    # Check times
     if hasattr(data, "index"):
-        tnum = nc4io.date2num(data.index)
-        itimes = get_item_index_from_dimension(nc4dset, "time", tnum)
-    else:
-        if data.shape[0] != ntimes:
-            errmess = f"Expected data of length {ntimes}, got {len(data)}."
-            raise ValueError(errmess)
-
-        _, ntimes, _ = nc4dset[dataset_name].shape
-        itimes = np.arange(ntimes)
-
-    # Check variables
-    if hasattr(data, "columns"):
-        data_variables = data.columns.str\
-                            .replace("\\[.*", "", regex=True)\
-                            .values.astype(str)
+        # Data is assumed to be a dataframe
+        times = nc4io.date2num(data.index)
+        itimes_nc, itimes_data = get_item_index_from_dimension(nc4dset, "time",\
+                                                                times)
+        variables = data.columns.values
         vname = data_variable_name(dataset_name)
-        ivars = get_item_index_from_dimension(nc4dset, vname, data_variables)
+        ivars_nc, ivars_data = get_item_index_from_dimension(nc4dset, vname,\
+                                                                variables)
     else:
-        if data.shape[1] != nvars:
-            errmess = f"Expected data with {nvars} variables, got {data.shape[1]}."
+        if data.shape != (ntimes, nvars):
+            errmess = f"Expected data of size ({ntimes}, {nvars}), "\
+                        +f"got {data.shape}."
             raise ValueError(errmess)
 
-        ivars = np.arange(nvars)
+        itimes_nc = np.arange(ntimes)
+        itimes_data = itimes_nc
+        ivars_nc = np.arange(nvars)
+        ivars_data = ivars_nc
 
-    data = np.array(data)[None, :, :]
-    nc4dset[dataset_name][istation, itimes, ivars] = data
+    tostore = np.array(data)[itimes_data[:, None], ivars_data[None, :]]
+    nc4dset[dataset_name][istation, itimes_nc, ivars_nc] = tostore
 
 
-def get_data(nc4dset, stationid, dataset_name=DEFAULT_DATASET_NAME):
-    istation = get_item_index_from_dimension(nc4dset, "stationid", stationid)
+def get_data(nc4dset: Dataset, \
+                dataset_name: str, \
+                stationid: str, \
+                clip: Optional[bool] = True):
+    istation, _ = get_item_index_from_dimension(nc4dset, "stationid", [stationid])
     istation = istation[0]
     colnames = get_dataset_column_names(nc4dset, dataset_name)
-    tdim = nc4io.TimeDimension.from_dataset(nc4dset)
-    times = tdim.values
+    times = nc4io.num2date(read_from_nc(nc4dset, "time"))
+
     df = pd.DataFrame(nc4dset[dataset_name][istation, :, :], index=times, \
                             columns=colnames)
+
+    if clip:
+        time_ok = df.notnull().any(axis=1)
+        var_ok = df.notnull().any(axis=0)
+        df = df.loc[time_ok, var_ok]
+
     return df
+
