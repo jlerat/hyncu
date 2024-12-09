@@ -17,7 +17,7 @@ EXPECTED_STATIONS_COLUMNS = ["NAME", "LONGITUDE", "LATITUDE"]
 TEXT_DATA_LABEL = "text"
 NUMERICAL_DATA_LABEL = "numerical"
 
-LABEL_SEPARATOR = "#"
+LABEL_SEPARATOR = "."
 
 
 def validate_units(units: list) -> None:
@@ -44,6 +44,13 @@ def get_item_index_from_dimension(nc4dset: Dataset,
         raise ValueError(errmess)
 
     return idx_nc, idx_data
+
+
+def check_datasetname(dataset_name):
+    if LABEL_SEPARATOR in dataset_name:
+        errmess = f"Dataset name '{dataset_name}' contains the"\
+                   + f" separation character '{LABEL_SEPARATOR}'."
+        raise ValueError(errmess)
 
 
 def data_variable_name(dataset_name):
@@ -94,6 +101,9 @@ def add_variables(nc4dset: Dataset,
                   times: list,
                   units: Optional[str] = None,
                   attrs: Optional[dict] = None):
+
+    check_datasetname(dataset_name)
+
     # Create dimensions
     kw = {data_variable_name(dataset_name): variables}
     nc4io.add_dimensions(nc4dset, time=times, stationid=stationids, **kw)
@@ -203,6 +213,7 @@ def store_stations_data(nc4dset: Dataset,
     dtype = values.dtype
     attrs = dict(description=f"Stations / {dlabel} data")
     dset = station_data_name(dlabel)
+
     vdim_name = station_data_variable_name(dlabel)
     var = nc4io.Variable(dset,
                          ["stationid", vdim_name],
@@ -231,6 +242,7 @@ def set_station_ids(nc4dset: Dataset, stations: pd.DataFrame) -> None:
 def set_station_data(nc4dset: Dataset, stations: pd.DataFrame) -> None:
     check_expected_stations_columns(stations.columns)
     set_station_ids(nc4dset, stations)
+    check_datasetname(STATION_DATASET_NAME)
 
     for dlabel in [TEXT_DATA_LABEL, NUMERICAL_DATA_LABEL]:
         info = select_types(stations, dlabel)
@@ -254,6 +266,8 @@ def set_data(nc4dset: Dataset,
              dataset_name: str,
              stationid: str,
              data: pd.DataFrame) -> None:
+
+    check_datasetname(dataset_name)
     istation, _ = get_item_index_from_dimension(nc4dset, "stationid",
                                                 [stationid])
     istation = istation[0]

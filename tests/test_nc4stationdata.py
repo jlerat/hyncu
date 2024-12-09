@@ -41,6 +41,10 @@ def test_dataframe(allclose):
         cols = [f"{v}[{u}]" for v, u in zip(variables, units)]
         df = pd.DataFrame(np.random.uniform(-1, 1, size=size), \
                                 index=times, columns=cols)
+
+        with pytest.raises(ValueError, match="Dataset name"):
+            nc4sd.set_data(nc, dataname+SEP, "a", df)
+
         nc4sd.set_data(nc, dataname, "a", df)
 
         # Set partial dataset
