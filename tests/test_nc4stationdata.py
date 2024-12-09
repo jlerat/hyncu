@@ -9,13 +9,13 @@ np.random.seed(5446)
 import pandas as pd
 
 from netCDF4 import Dataset
-from hyncu import nc4io, nc4dataframe
+from hyncu import nc4io, nc4stationdata as nc4sd
 
 import warnings
 
 FHERE = Path(__file__).resolve().parent
 
-SEP = nc4dataframe.LABEL_SEPARATOR
+SEP = nc4sd.LABEL_SEPARATOR
 
 def test_dataframe(allclose):
     fnc = FHERE / "test_dataframe.nc"
@@ -25,7 +25,7 @@ def test_dataframe(allclose):
         times = pd.date_range("1990-01-01", "2000-12-31", freq="D")
         dataname = "truc"
         units = ["mm.day-1", "m3.s-1", "degC", "kg"]
-        nc4dataframe.add_variables(nc, stationids=stations, \
+        nc4sd.add_variables(nc, stationids=stations, \
                     variables=variables, \
                     units=units, \
                     times=times, \
@@ -41,29 +41,33 @@ def test_dataframe(allclose):
         cols = [f"{v}[{u}]" for v, u in zip(variables, units)]
         df = pd.DataFrame(np.random.uniform(-1, 1, size=size), \
                                 index=times, columns=cols)
-        nc4dataframe.set_data(nc, dataname, "a", df)
+
+        with pytest.raises(ValueError, match="Dataset name"):
+            nc4sd.set_data(nc, dataname+SEP, "a", df)
+
+        nc4sd.set_data(nc, dataname, "a", df)
 
         # Set partial dataset
         df2 = df.iloc[:len(df)//2, :2]
-        nc4dataframe.set_data(nc, dataname, "b", df2)
+        nc4sd.set_data(nc, dataname, "b", df2)
 
         # Set numpy array
         v = df.values.copy()
-        nc4dataframe.set_data(nc, dataname, "c", v)
+        nc4sd.set_data(nc, dataname, "c", v)
 
         with pytest.raises(ValueError, match="Expected data of size"):
             v = df2.values.copy()
-            nc4dataframe.set_data(nc, dataname, "c", v)
+            nc4sd.set_data(nc, dataname, "c", v)
 
 
     with Dataset(fnc, "r") as nc:
-        df = nc4dataframe.get_data(nc, dataname, "a")
+        df = nc4sd.get_data(nc, dataname, "a")
         assert df.shape == (len(times), len(variables))
 
-        df3 = nc4dataframe.get_data(nc, dataname, "b", clip=False)
+        df3 = nc4sd.get_data(nc, dataname, "b", clip=False)
         assert df3.shape == (len(times), len(variables))
 
-        coln = nc4dataframe.get_dataset_column_names(nc, dataname)
+        coln = nc4sd.get_dataset_column_names(nc, dataname)
         for icn, cn in enumerate(coln):
             v = df3.loc[df2.index[-1]:, cn].iloc[1:]
             assert v.isnull().all()
@@ -71,7 +75,7 @@ def test_dataframe(allclose):
             if icn>=2:
                 assert df3.loc[:, cn].isnull().all()
 
-        df4 = nc4dataframe.get_data(nc, dataname, "b")
+        df4 = nc4sd.get_data(nc, dataname, "b")
         assert df4.shape == df2.shape
 
     fnc.unlink()
@@ -93,14 +97,14 @@ def test_stations(allclose):
                                     for i in np.random.randint(0, 26, 10)]) \
                                         for s in stations]
         with pytest.raises(ValueError, match="LONGITUDE was expected"):
-            nc4dataframe.set_station_data(nc, df)
+            nc4sd.set_station_data(nc, df)
 
         df.loc[:, "LONGITUDE"] = 1.
         df.loc[:, "LATITUDE"] = 2.
-        nc4dataframe.set_station_data(nc, df)
+        nc4sd.set_station_data(nc, df)
 
     with Dataset(fnc, "r") as nc:
-        df2 = nc4dataframe.get_station_data(nc)
+        df2 = nc4sd.get_station_data(nc)
         assert df2.shape == df.shape
         assert allclose(df2.iloc[:, :4].values, df.iloc[:, :4].values, atol=1e-6)
 

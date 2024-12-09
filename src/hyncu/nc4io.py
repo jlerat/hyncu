@@ -1,7 +1,6 @@
 """Utility functions to export netcdf files """
 from __future__ import annotations
 from typing import Optional
-import re, sys
 from getpass import getuser
 import numpy as np
 import pandas as pd
@@ -22,14 +21,15 @@ DIM_LATITUDE_NAME = "latitude"
 DIM_TIME_NAME = "time"
 
 
-def num2date(nums: np.ndarray, units: Optional[str] = TIME_UNITS) -> pd.DatetimeIndex:
+def num2date(nums: np.ndarray,
+             units: Optional[str] = TIME_UNITS) -> pd.DatetimeIndex:
     """ Function to convert numerical time indexes to pandas
     DatetimeIndex. The function ensures that cftime datetime
     type are not used.
     """
     try:
-        nums = netCDF4.num2date(nums, units, \
-                            only_use_cftime_datetimes=False)
+        nums = netCDF4.num2date(nums, units,
+                                only_use_cftime_datetimes=False)
     except TypeError:
         nums = netCDF4.num2date(nums, units)
 
@@ -45,7 +45,6 @@ def date2num(times: pd.DatetimeIndex) -> np.ndarray:
     return nums
 
 
-
 class Dimension():
     def __init__(self, name: str, values: np.ndarray, dtype: str, units: str):
         self.name = str(name)
@@ -56,20 +55,22 @@ class Dimension():
         cf_units.Unit(units)
         self.units = units
 
-    def to_dataset(self, nc4dset:Dataset) -> None:
+    def to_dataset(self, nc4dset: Dataset) -> None:
         nval = len(self.values)
 
         # Check if dimension does not already exist
         if self.name in nc4dset.dimensions:
             check = nc4dset[self.name][:]
-            if not np.all(check==self.values):
-                errmess = f"Existing dimension does not match."
+
+            if not np.all(check == self.values):
+                errmess = "Existing dimensions does not match."
                 raise ValueError(errmess)
+
             return
 
         nc4dset.createDimension(self.name, nval)
-        var = nc4dset.createVariable(self.name, self.dtype, \
-                         dimensions=[self.name])
+        var = nc4dset.createVariable(self.name, self.dtype,
+                                     dimensions=[self.name])
         var[:] = self.values
         var.units = self.units
         var.long_name = self.name
@@ -87,8 +88,8 @@ class Dimension():
 class TimeDimension(Dimension):
     def __init__(self, values: np.ndarray):
         name = DIM_TIME_NAME
-        times = netCDF4.date2num(pd.to_datetime(values).to_pydatetime(), \
-                            units=TIME_UNITS)
+        times = netCDF4.date2num(pd.to_datetime(values).to_pydatetime(),
+                                 units=TIME_UNITS)
         dtype = TIME_DTYPE
         units = TIME_UNITS
         super(TimeDimension, self).__init__(name, times, dtype, units)
@@ -105,7 +106,8 @@ class CoordinateDimension(Dimension):
         assert name in [DIM_LONGITUDE_NAME, DIM_LATITUDE_NAME]
         values = np.array(values).astype(np.float64)
         dtype = np.float64
-        units = "degrees_east" if name==DIM_LONGITUDE_NAME else "degrees_north"
+        units = "degrees_east" if name == DIM_LONGITUDE_NAME\
+                else "degrees_north"
         super(CoordinateDimension, self).__init__(name, values, dtype, units)
 
     @classmethod
@@ -117,7 +119,7 @@ class CoordinateDimension(Dimension):
 def add_dimensions(ncdset: Dataset, **kwargs) -> None:
     dims = {}
     for dname, values in kwargs.items():
-        if dname=="time":
+        if dname == "time":
             tdim = TimeDimension(values)
             tdim.to_dataset(ncdset)
             dims[dname] = tdim
@@ -138,34 +140,36 @@ def add_dimensions(ncdset: Dataset, **kwargs) -> None:
 
 class Variable():
     def __init__(self, name: str, dimensions: list,
-                    units: Optional[str] = "-", \
-                    dtype: Optional[str] = DEFAULT_DTYPE, \
-                    compression: Optional[str] = "zlib", \
-                    chunksizes: Optional[tuple] = None, \
-                    fill_value: Optional[float] = DEFAULT_MISSING_VALUE, \
-                    significant_digit: Optional[int] = DEFAULT_SIGNIFICANT_DIGIT, \
-                    attrs: Optional[dict] = None):
+                 units: Optional[str] = "-",
+                 dtype: Optional[str] = DEFAULT_DTYPE,
+                 compression: Optional[str] = "zlib",
+                 chunksizes: Optional[tuple] = None,
+                 fill_value: Optional[float] = DEFAULT_MISSING_VALUE,
+                 significant_digit: Optional[int] = DEFAULT_SIGNIFICANT_DIGIT,
+                 attrs: Optional[dict] = None):
         self.name = str(name)
         self.dtype = np.dtype(dtype)
         cf_units.Unit(units)
         self.units = units
         self.dimensions = dimensions
-        self.significant_digit = int(significant_digit)\
-                            if not significant_digit is None else None
+        if significant_digit is not None:
+            self.significant_digit = int(significant_digit)
+        else:
+            self.significant_digit = None
         self.compression = compression
         self.fill_value = self.dtype.type(fill_value)
         self.chunksizes = chunksizes
         self.attrs = {} if attrs is None else attrs
 
-
     def to_dataset(self, nc4dset: Dataset):
-        var = nc4dset.createVariable(varname=self.name, \
-                            dimensions=self.dimensions, \
-                            datatype=self.dtype, \
-                            chunksizes=self.chunksizes, \
-                            least_significant_digit=self.significant_digit, \
-                            compression=self.compression, \
-                            fill_value=self.fill_value)
+        sdigit = self.significant_digit
+        var = nc4dset.createVariable(varname=self.name,
+                                     dimensions=self.dimensions,
+                                     datatype=self.dtype,
+                                     chunksizes=self.chunksizes,
+                                     least_significant_digit=sdigit,
+                                     compression=self.compression,
+                                     fill_value=self.fill_value)
         var.units = self.units
         var.long_name = self.name
         var.standard_name = self.name
@@ -173,13 +177,12 @@ class Variable():
             setattr(var, str(key), val)
 
 
-
 def add_meta(nc4dset: Dataset, **kwargs: str):
     # Set minimal information
-    kwargs["date_created"] = kwargs.get("date_created", \
-                                            str(datetime.now()))
-    kwargs["version"] = kwargs.get("version", \
-                                            str(datetime.now()))
+    kwargs["date_created"] = kwargs.get("date_created",
+                                        str(datetime.now()))
+    kwargs["version"] = kwargs.get("version",
+                                   str(datetime.now()))
     try:
         user = getuser()
     except Exception:
@@ -189,5 +192,3 @@ def add_meta(nc4dset: Dataset, **kwargs: str):
     # Set meta data
     for key, value in kwargs.items():
         setattr(nc4dset, key, value)
-
-

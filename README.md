@@ -18,10 +18,12 @@ from netCDF4 import Dataset
 import numpy as np
 import pandas as pd
 
-from hyncu import nc4dataframe, nc4io
+from hyncu import nc4io
+from hyncu import nc4stationdata as nc4sd
 
 fnc = "test_dataframe.nc"
 with Dataset(fnc, "w") as nc:
+
     # --- working with gridded data
     grp = nc.createGroup("gridded")
 
@@ -41,7 +43,7 @@ with Dataset(fnc, "w") as nc:
     grp[dataset_name][:] = data
 
 
-    # --- Working with data frames ----
+    # --- Working with pandas data frames ----
     grp = nc.createGroup("dataframe")
 
     # Define list of stations with meta data (random here)
@@ -55,7 +57,7 @@ with Dataset(fnc, "w") as nc:
                         index=stationids)
 
     # Store stations meta data
-    nc4dataframe.set_station_data(grp, df)
+    nc4sd.set_station_data(grp, df)
 
     # Define data variables and their units
     variables = ["v1", "v2", "v3", "v4"]
@@ -66,7 +68,7 @@ with Dataset(fnc, "w") as nc:
 
     # Configure netcdf file
     dataset_name = "important_dataframe_stuff"
-    nc4dataframe.add_variables(grp, \
+    nc4sd.add_variables(grp, \
                 stationids=stationids, \
                 variables=variables, \
                 units=units, \
@@ -76,14 +78,14 @@ with Dataset(fnc, "w") as nc:
     # store data for each station
     for stationid in stationids:
         data  = np.random.uniform(0, 1, (len(times), len(variables)))
-        nc4dataframe.set_data(grp, dataset_name, stationid, data)
+        nc4sd.set_data(grp, dataset_name, stationid, data)
 
     # Retrieve station meta data
-    df = nc4dataframe.get_station_data(grp)
+    df = nc4sd.get_station_data(grp)
 
     # Retrieve station data
     for stationid in stationids:
-        d = nc4dataframe.get_data(grp, dataset_name, stationid)
+        d = nc4sd.get_data(grp, dataset_name, stationid)
 ```
 
 ## Attribution
