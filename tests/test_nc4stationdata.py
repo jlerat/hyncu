@@ -33,8 +33,8 @@ def test_dataframe(allclose):
 
         assert "time" in nc.dimensions
         assert "stationid" in nc.dimensions
-        assert f"{dataname}{SEP}variable" in nc.dimensions
-        assert f"{dataname}{SEP}variable{SEP}units" in nc.variables
+        assert f"{dataname}{SEP}variable_name" in nc.dimensions
+        assert f"{dataname}{SEP}variable_unit" in nc.variables
         assert dataname in nc.variables
 
         size = (len(times), len(variables))
