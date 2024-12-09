@@ -54,12 +54,11 @@ def check_datasetname(dataset_name):
 
 
 def data_variable_name(dataset_name):
-    return f"{dataset_name}{LABEL_SEPARATOR}variable"
+    return f"{dataset_name}{LABEL_SEPARATOR}variable_name"
 
 
 def station_data_name(dlabel):
-    return f"{STATION_DATASET_NAME}{LABEL_SEPARATOR}"\
-           + f"{dlabel}{LABEL_SEPARATOR}data"
+    return f"{STATION_DATASET_NAME}{LABEL_SEPARATOR}{dlabel}"
 
 
 def station_data_variable_name(dlabel):
@@ -67,8 +66,7 @@ def station_data_variable_name(dlabel):
 
 
 def data_unit_name(dataset_name):
-    return f"{dataset_name}{LABEL_SEPARATOR}variable"\
-           + f"{LABEL_SEPARATOR}units"
+    return f"{dataset_name}{LABEL_SEPARATOR}variable_unit"
 
 
 def station_data_unit_name(dlabel):
@@ -173,6 +171,9 @@ def configure_stations_variables(nc4dset: Dataset,
                            variable_names.dtype, "-")
     vdim.to_dataset(nc4dset)
 
+    desc = "Variable storing the list of station meta data."
+    nc4dset[vdim_name].description = desc
+
 
 def configure_stations_units(nc4dset: Dataset,
                              info: pd.DataFrame, dlabel: str) -> None:
@@ -188,12 +189,12 @@ def configure_stations_units(nc4dset: Dataset,
 
     uname = station_data_unit_name(dlabel)
     vdim_name = station_data_variable_name(dlabel)
+    descr = "Variable storing station meta data units."
     un = nc4io.Variable(uname, [vdim_name], units="-",
                         dtype=units.dtype, fill_value="NA",
                         significant_digit=None,
                         compression=None,
-                        attrs={"description":
-                               "Units for each station info column"})
+                        attrs={"description": descr})
     un.to_dataset(nc4dset)
     units = np.array(units)
     nc4dset[uname][:] = units
