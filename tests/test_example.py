@@ -9,7 +9,8 @@ import numpy as np
 np.random.seed(5446)
 
 from netCDF4 import Dataset
-from hyncu import nc4io, nc4dataframe
+from hyncu import nc4io
+from hyncu import nc4stationdata as nc4sd
 
 import warnings
 
@@ -52,7 +53,7 @@ def test_example(allclose):
                             index=stationids)
 
         # Store stations meta data
-        nc4dataframe.set_station_data(grp, df)
+        nc4sd.set_station_data(grp, df)
 
         # Define data variables and their units
         variables = ["v1", "v2", "v3", "v4"]
@@ -63,7 +64,7 @@ def test_example(allclose):
 
         # Configure netcdf file
         dataset_name = "important_dataframe_stuff"
-        nc4dataframe.add_variables(grp, \
+        nc4sd.add_variables(grp, \
                     stationids=stationids, \
                     variables=variables, \
                     units=units, \
@@ -73,14 +74,14 @@ def test_example(allclose):
         # store data for each station
         for stationid in stationids:
             data  = np.random.uniform(0, 1, (len(times), len(variables)))
-            nc4dataframe.set_data(grp, dataset_name, stationid, data)
+            nc4sd.set_data(grp, dataset_name, stationid, data)
 
         # Retrieve station meta data
-        df = nc4dataframe.get_station_data(grp)
+        df = nc4sd.get_station_data(grp)
 
         # Retrieve station data
         for stationid in stationids:
-            d = nc4dataframe.get_data(grp, dataset_name, stationid)
+            d = nc4sd.get_data(grp, dataset_name, stationid)
 
     fnc.unlink()
 

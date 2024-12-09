@@ -38,6 +38,13 @@ jobs:
           echo "--- hyncu install : located in $PWD ---"
           pip install -e .
 
+      - name: Lint with flake8
+        run: |
+          source $CONDA/etc/profile.d/conda.sh
+          conda activate env_hyncu
+          cd $GITHUB_WORKSPACE
+          flake8 src/hyncu
+
       - name: Run tests
         run: |
           source $CONDA/etc/profile.d/conda.sh
