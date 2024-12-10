@@ -207,9 +207,9 @@ def configure_stations_units(ncdset: Dataset,
 
 
 def store_stations_data_by_type(ncdset: Dataset,
-                        station_dataset_name: str,
-                        info: pd.DataFrame,
-                        dlabel: str) -> None:
+                                station_dataset_name: str,
+                                info: pd.DataFrame,
+                                dlabel: str) -> None:
     if dlabel == NUMERICAL_DATA_LABEL:
         values = info.values
         fill_value = np.nan
@@ -250,10 +250,10 @@ def set_stationid_dimension(ncdset: Dataset, stations: pd.DataFrame) -> None:
 
 
 def set_data_stations(ncdset: Dataset,
-                     stations: pd.DataFrame,
-                     station_dataset_name:
-                     Optional[str] = DEFAULT_STATION_DATASET_NAME,
-                     attrs: Optional[dict] = None) -> None:
+                      stations: pd.DataFrame,
+                      station_dataset_name:
+                      Optional[str] = DEFAULT_STATION_DATASET_NAME,
+                      attrs: Optional[dict] = None) -> None:
     if station_dataset_name == DEFAULT_STATION_DATASET_NAME:
         check_expected_stations_columns(stations.columns)
 
@@ -288,8 +288,9 @@ def get_attributes(ncdset: Dataset, dataset_name: str) -> dict[str]:
 
 
 def get_data_stations(ncdset: Dataset,
-                     station_dataset_name:
-                     Optional[str] = DEFAULT_STATION_DATASET_NAME) -> pd.DataFrame:
+                      station_dataset_name:
+                      Optional[str] = \
+                              DEFAULT_STATION_DATASET_NAME) -> pd.DataFrame:
     # Get attributes
     dset = station_data_name(station_dataset_name, NUMERICAL_DATA_LABEL)
     attrs = get_attributes(ncdset, dset)
@@ -310,9 +311,9 @@ def get_data_stations(ncdset: Dataset,
 
 
 def set_data_single_site(ncdset: Dataset,
-             dataset_name: str,
-             stationid: str,
-             data: pd.DataFrame) -> None:
+                         dataset_name: str,
+                         stationid: str,
+                         data: pd.DataFrame) -> None:
 
     check_datasetname(dataset_name)
     istation, _ = get_item_index_from_dimension(ncdset, "stationid",

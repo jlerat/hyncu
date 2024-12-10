@@ -77,7 +77,7 @@ class Dimension():
 
         ncdset.createDimension(self.name, nval)
         var = ncdset.createVariable(self.name, self.dtype,
-                                     dimensions=[self.name])
+                                    dimensions=[self.name])
         var[:] = self.values
         var.dimension_type = self.dimension_type
         var.units = self.units
@@ -198,12 +198,12 @@ class Variable():
     def to_dataset(self, ncdset: Dataset):
         sdigit = self.significant_digit
         var = ncdset.createVariable(varname=self.name,
-                                     dimensions=self.dimensions,
-                                     datatype=self.dtype,
-                                     chunksizes=self.chunksizes,
-                                     least_significant_digit=sdigit,
-                                     compression=self.compression,
-                                     fill_value=self.fill_value)
+                                    dimensions=self.dimensions,
+                                    datatype=self.dtype,
+                                    chunksizes=self.chunksizes,
+                                    least_significant_digit=sdigit,
+                                    compression=self.compression,
+                                    fill_value=self.fill_value)
         var.units = self.units
         var.long_name = self.name
         var.standard_name = self.name
