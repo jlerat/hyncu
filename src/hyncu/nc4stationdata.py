@@ -293,6 +293,9 @@ def get_data_stations(ncdset: Dataset,
     # Get attributes
     dset = station_data_name(station_dataset_name, NUMERICAL_DATA_LABEL)
     attrs = get_attributes(ncdset, dset)
+    for key in ["long_name", "standard_name", "data_type",
+                "units", "_FillValue", "least_significant_digit"]:
+        attrs.pop(key)
 
     # Get data
     df = []
