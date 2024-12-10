@@ -1,5 +1,6 @@
 """Utility functions to export netcdf files """
 from __future__ import annotations
+import re
 from typing import Optional
 from getpass import getuser
 from pathlib import Path
@@ -159,7 +160,7 @@ def minimal_metadata(attrs: Optional[dict] = None):
 
     attrs["date_created"] = attrs.get("date_created",
                                       str(datetime.now()))
-    attrs["version"] = attrs.get("version", "v1.0")
+    attrs["version"] = re.sub("^v", "", str(attrs.get("version", "1.0")))
     attrs["data_provider"] = attrs.get("data_provider", "unknown")
     attrs["source_file"] = attrs.get("source_file",
                                      str(Path(__file__).resolve()))
@@ -209,9 +210,3 @@ class Variable():
         var.standard_name = self.name
         for key, val in self.attrs.items():
             setattr(var, str(key), val)
-
-
-def add_meta(ncdset: Dataset, **kwargs: str):
-    kwargs = minimal_metadata(kwargs)
-    for key, value in kwargs.items():
-        setattr(ncdset, key, value)

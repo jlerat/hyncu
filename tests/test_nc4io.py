@@ -146,14 +146,3 @@ def test_variable(allclose):
         assert allclose(d, data, atol=1e-5, equal_nan=True)
 
     fnc.unlink()
-
-
-def test_meta(allclose):
-    fnc = FHERE / "test_meta.nc"
-    with Dataset(fnc, "w") as nc:
-        nc4io.add_meta(nc, author="ma pomme")
-
-    with Dataset(fnc, "r") as nc:
-        assert nc.author == "ma pomme"
-
-    fnc.unlink()
