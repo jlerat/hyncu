@@ -2,6 +2,7 @@
 from __future__ import annotations
 from typing import Optional
 from getpass import getuser
+from pathlib import Path
 import numpy as np
 import pandas as pd
 from datetime import datetime
@@ -61,12 +62,12 @@ class Dimension():
               + f", {self.dtype}, {len(self.values)} values"
         return txt
 
-    def to_dataset(self, nc4dset: Dataset) -> None:
+    def to_dataset(self, ncdset: Dataset) -> None:
         nval = len(self.values)
 
         # Check if dimension does not already exist
-        if self.name in nc4dset.dimensions:
-            check = nc4dset[self.name][:]
+        if self.name in ncdset.dimensions:
+            check = ncdset[self.name][:]
 
             if not np.all(check == self.values):
                 errmess = "Existing dimensions does not match."
@@ -74,8 +75,8 @@ class Dimension():
 
             return
 
-        nc4dset.createDimension(self.name, nval)
-        var = nc4dset.createVariable(self.name, self.dtype,
+        ncdset.createDimension(self.name, nval)
+        var = ncdset.createVariable(self.name, self.dtype,
                                      dimensions=[self.name])
         var[:] = self.values
         var.dimension_type = self.dimension_type
@@ -84,8 +85,8 @@ class Dimension():
         var.standard_name = self.name
 
     @classmethod
-    def from_dataset(cls, nc4dset: Dataset, name: str) -> Dimension:
-        dvar = nc4dset[name]
+    def from_dataset(cls, ncdset: Dataset, name: str) -> Dimension:
+        dvar = ncdset[name]
         dtype = dvar.dtype
         units = dvar.units
         values = dvar[:]
@@ -102,8 +103,8 @@ class TimeDimension(Dimension):
         self.dimension_type = "time"
 
     @classmethod
-    def from_dataset(cls, nc4dset: Dataset) -> Dimension:
-        dim = Dimension.from_dataset(nc4dset, DIM_TIME_NAME)
+    def from_dataset(cls, ncdset: Dataset) -> Dimension:
+        dim = Dimension.from_dataset(ncdset, DIM_TIME_NAME)
         dim.values = num2date(dim.values, dim.units)
         return dim
 
@@ -119,9 +120,9 @@ class CoordinateDimension(Dimension):
         self.dimension_type = "coordinate"
 
     @classmethod
-    def from_dataset(cls, nc4dset: Dataset, name: str) -> Dimension:
+    def from_dataset(cls, ncdset: Dataset, name: str) -> Dimension:
         assert name in [DIM_LONGITUDE_NAME, DIM_LATITUDE_NAME]
-        return Dimension.from_dataset(nc4dset, name)
+        return Dimension.from_dataset(ncdset, name)
 
 
 def add_dimensions(ncdset: Dataset, **kwargs) -> None:
@@ -152,6 +153,25 @@ def add_dimensions(ncdset: Dataset, **kwargs) -> None:
     return dims
 
 
+def minimal_metadata(attrs: Optional[dict] = None):
+    if attrs is None:
+        attrs = {}
+
+    attrs["date_created"] = attrs.get("date_created",
+                                      str(datetime.now()))
+    attrs["version"] = attrs.get("version", "v1.0")
+    attrs["data_provider"] = attrs.get("data_provider", "unknown")
+    attrs["source_file"] = attrs.get("source_file",
+                                     str(Path(__file__).resolve()))
+    try:
+        user = getuser()
+    except Exception:
+        user = "unknown"
+
+    attrs["author"] = attrs.get("author", user)
+    return attrs
+
+
 class Variable():
     def __init__(self, name: str, dimensions: list,
                  units: Optional[str] = "-",
@@ -173,11 +193,11 @@ class Variable():
         self.compression = compression
         self.fill_value = self.dtype.type(fill_value)
         self.chunksizes = chunksizes
-        self.attrs = {} if attrs is None else attrs
+        self.attrs = minimal_metadata(attrs)
 
-    def to_dataset(self, nc4dset: Dataset):
+    def to_dataset(self, ncdset: Dataset):
         sdigit = self.significant_digit
-        var = nc4dset.createVariable(varname=self.name,
+        var = ncdset.createVariable(varname=self.name,
                                      dimensions=self.dimensions,
                                      datatype=self.dtype,
                                      chunksizes=self.chunksizes,
@@ -191,18 +211,7 @@ class Variable():
             setattr(var, str(key), val)
 
 
-def add_meta(nc4dset: Dataset, **kwargs: str):
-    # Set minimal information
-    kwargs["date_created"] = kwargs.get("date_created",
-                                        str(datetime.now()))
-    kwargs["version"] = kwargs.get("version",
-                                   str(datetime.now()))
-    try:
-        user = getuser()
-    except Exception:
-        user = "unknown"
-    kwargs["author"] = kwargs.get("author", user)
-
-    # Set meta data
+def add_meta(ncdset: Dataset, **kwargs: str):
+    kwargs = minimal_metadata(kwargs)
     for key, value in kwargs.items():
-        setattr(nc4dset, key, value)
+        setattr(ncdset, key, value)

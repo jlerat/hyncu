@@ -19,6 +19,9 @@ FHERE = Path(__file__).resolve().parent
 
 def test_example(allclose):
     fnc = FHERE / "test_example.nc"
+    if fnc.exists():
+        fnc.unlink()
+
     with Dataset(fnc, "w") as nc:
         # --- working with gridded data
         grp = nc.createGroup("gridded")
@@ -30,8 +33,9 @@ def test_example(allclose):
 
         # Setup variable
         dataset_name = "important_gridded_stuff"
+        attrs = {"description": "Some description"}
         nvar = nc4io.Variable(dataset_name, ["latitude", "longitude"], \
-                    units="mm.month-1")
+                    units="mm.month-1", attrs=attrs)
         nvar.to_dataset(grp)
 
         # Store data
@@ -53,7 +57,7 @@ def test_example(allclose):
                             index=stationids)
 
         # Store stations meta data
-        nc4sd.set_station_data(grp, df)
+        nc4sd.set_data_stations(grp, df)
 
         # Define data variables and their units
         variables = ["v1", "v2", "v3", "v4"]
@@ -74,14 +78,14 @@ def test_example(allclose):
         # store data for each station
         for stationid in stationids:
             data  = np.random.uniform(0, 1, (len(times), len(variables)))
-            nc4sd.set_data(grp, dataset_name, stationid, data)
+            nc4sd.set_data_single_site(grp, dataset_name, stationid, data)
 
         # Retrieve station meta data
-        df = nc4sd.get_station_data(grp)
+        df, attrs = nc4sd.get_data_stations(grp)
 
         # Retrieve station data
         for stationid in stationids:
-            d = nc4sd.get_data(grp, dataset_name, stationid)
+            d = nc4sd.get_data_single_site(grp, dataset_name, stationid)
 
     fnc.unlink()
 

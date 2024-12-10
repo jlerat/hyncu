@@ -206,9 +206,10 @@ def configure_stations_units(ncdset: Dataset,
     ncdset[uname][:] = units
 
 
-def store_stations_data(ncdset: Dataset,
+def store_stations_data_by_type(ncdset: Dataset,
                         station_dataset_name: str,
-                        info: pd.DataFrame, dlabel: str) -> None:
+                        info: pd.DataFrame,
+                        dlabel: str) -> None:
     if dlabel == NUMERICAL_DATA_LABEL:
         values = info.values
         fill_value = np.nan
@@ -236,7 +237,7 @@ def store_stations_data(ncdset: Dataset,
     ncdset[dset][:] = values
 
 
-def set_station_ids(ncdset: Dataset, stations: pd.DataFrame) -> None:
+def set_stationid_dimension(ncdset: Dataset, stations: pd.DataFrame) -> None:
     stationids = np.array(stations.index.values).astype(str)
     if "stationid" not in ncdset.dimensions:
         dim = nc4io.Dimension("stationid", stationids, stationids.dtype, "-")
@@ -248,14 +249,19 @@ def set_station_ids(ncdset: Dataset, stations: pd.DataFrame) -> None:
             raise ValueError(errmess)
 
 
-def set_station_data(ncdset: Dataset,
+def set_data_stations(ncdset: Dataset,
                      stations: pd.DataFrame,
                      station_dataset_name:
-                     Optional[str] = DEFAULT_STATION_DATASET_NAME) -> None:
+                     Optional[str] = DEFAULT_STATION_DATASET_NAME,
+                     attrs: Optional[dict] = None) -> None:
     if station_dataset_name == DEFAULT_STATION_DATASET_NAME:
         check_expected_stations_columns(stations.columns)
-    set_station_ids(ncdset, stations)
+
     check_datasetname(station_dataset_name)
+
+    set_stationid_dimension(ncdset, stations)
+
+    attrs = nc4io.minimal_metadata(attrs)
 
     for dlabel in [TEXT_DATA_LABEL, NUMERICAL_DATA_LABEL]:
         info = select_types(stations, dlabel)
@@ -263,12 +269,32 @@ def set_station_data(ncdset: Dataset,
                                      info, dlabel)
         configure_stations_units(ncdset, station_dataset_name,
                                  info, dlabel)
-        store_stations_data(ncdset, station_dataset_name, info, dlabel)
+        store_stations_data_by_type(ncdset, station_dataset_name,
+                                    info, dlabel)
+        # Set metadata
+        attrs["data_type"] = dlabel
+        dset = station_data_name(station_dataset_name, dlabel)
+        for key, value in attrs.items():
+            setattr(ncdset[dset], key, value)
 
 
-def get_station_data(ncdset: Dataset,
+def get_attributes(ncdset: Dataset, dataset_name: str) -> dict[str]:
+    attrs = {}
+    ndt = ncdset[dataset_name]
+    for key in ndt.ncattrs():
+        attrs[key] = getattr(ndt, key)
+
+    return attrs
+
+
+def get_data_stations(ncdset: Dataset,
                      station_dataset_name:
                      Optional[str] = DEFAULT_STATION_DATASET_NAME) -> pd.DataFrame:
+    # Get attributes
+    dset = station_data_name(station_dataset_name, NUMERICAL_DATA_LABEL)
+    attrs = get_attributes(ncdset, dset)
+
+    # Get data
     df = []
     stationids = ncdset["stationid"][:]
     for dlabel in [NUMERICAL_DATA_LABEL, TEXT_DATA_LABEL]:
@@ -276,10 +302,11 @@ def get_station_data(ncdset: Dataset,
         info = read_from_nc(ncdset, dset)
         colnames = get_dataset_column_names(ncdset, dset)
         df.append(pd.DataFrame(info, index=stationids, columns=colnames))
-    return pd.concat(df, axis=1)
+
+    return pd.concat(df, axis=1), attrs
 
 
-def set_data(ncdset: Dataset,
+def set_data_single_site(ncdset: Dataset,
              dataset_name: str,
              stationid: str,
              data: pd.DataFrame) -> None:
@@ -321,13 +348,18 @@ def set_data(ncdset: Dataset,
     ncdset[dataset_name][istation, iindex_nc, ivars_nc] = tostore
 
 
-def get_data(ncdset: Dataset,
+def get_data_single_site(ncdset: Dataset,
              dataset_name: str,
              stationid: str,
              clip: Optional[bool] = True):
+    # Get attributes
+    attrs = get_attributes(ncdset, dataset_name)
+
+    # Find station index
     istation, _ = get_item_index_from_dimension(ncdset,
                                                 "stationid",
                                                 [stationid])
+    # Build dataframe
     istation = istation[0]
     colnames = get_dataset_column_names(ncdset, dataset_name)
     index = read_from_nc(ncdset, "index")
@@ -344,4 +376,4 @@ def get_data(ncdset: Dataset,
         var_ok = df.notnull().any(axis=0)
         df = df.loc[index_ok, var_ok]
 
-    return df
+    return df, attrs
