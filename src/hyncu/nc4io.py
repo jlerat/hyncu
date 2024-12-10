@@ -50,10 +50,16 @@ class Dimension():
         self.name = str(name)
         self.values = np.array(values)
         self.dtype = np.dtype(dtype)
+        self.dimension_type = "generic"
 
         # Check unit
         cf_units.Unit(units)
         self.units = units
+
+    def __str__(self):
+        txt = f"Dimension {self.name} [self.dimension_type]"\
+              + f", {self.dtype}, {len(self.values)} values"
+        return txt
 
     def to_dataset(self, nc4dset: Dataset) -> None:
         nval = len(self.values)
@@ -72,6 +78,7 @@ class Dimension():
         var = nc4dset.createVariable(self.name, self.dtype,
                                      dimensions=[self.name])
         var[:] = self.values
+        var.dimension_type = self.dimension_type
         var.units = self.units
         var.long_name = self.name
         var.standard_name = self.name
@@ -86,13 +93,13 @@ class Dimension():
 
 
 class TimeDimension(Dimension):
-    def __init__(self, values: np.ndarray):
-        name = DIM_TIME_NAME
+    def __init__(self, name: str, values: np.ndarray):
         times = netCDF4.date2num(pd.to_datetime(values).to_pydatetime(),
                                  units=TIME_UNITS)
         dtype = TIME_DTYPE
         units = TIME_UNITS
         super(TimeDimension, self).__init__(name, times, dtype, units)
+        self.dimension_type = "time"
 
     @classmethod
     def from_dataset(cls, nc4dset: Dataset) -> Dimension:
@@ -109,6 +116,7 @@ class CoordinateDimension(Dimension):
         units = "degrees_east" if name == DIM_LONGITUDE_NAME\
                 else "degrees_north"
         super(CoordinateDimension, self).__init__(name, values, dtype, units)
+        self.dimension_type = "coordinate"
 
     @classmethod
     def from_dataset(cls, nc4dset: Dataset, name: str) -> Dimension:
@@ -119,21 +127,27 @@ class CoordinateDimension(Dimension):
 def add_dimensions(ncdset: Dataset, **kwargs) -> None:
     dims = {}
     for dname, values in kwargs.items():
-        if dname == "time":
-            tdim = TimeDimension(values)
+        # Test if the dimension is time
+        try:
+            np.datetime_data(values.dtype)
+            istime = True
+        except Exception:
+            istime = False
+
+        if istime:
+            tdim = TimeDimension(dname, values)
             tdim.to_dataset(ncdset)
             dims[dname] = tdim
-
-        elif dname in [DIM_LONGITUDE_NAME, DIM_LATITUDE_NAME]:
-            ldim = CoordinateDimension(values, dname)
-            ldim.to_dataset(ncdset)
-            dims[dname] = ldim
-
         else:
-            values = np.array(values)
-            dim = Dimension(dname, values, values.dtype, "-")
-            dim.to_dataset(ncdset)
-            dims[dname] = dim
+            if dname in [DIM_LONGITUDE_NAME, DIM_LATITUDE_NAME]:
+                ldim = CoordinateDimension(values, dname)
+                ldim.to_dataset(ncdset)
+                dims[dname] = ldim
+            else:
+                values = np.array(values)
+                dim = Dimension(dname, values, values.dtype, "-")
+                dim.to_dataset(ncdset)
+                dims[dname] = dim
 
     return dims
 
