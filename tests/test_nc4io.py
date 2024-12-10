@@ -26,6 +26,9 @@ def test_num2date(allclose):
 
 def test_dimension(allclose):
     fnc = FHERE / "test_dimension.nc"
+    if fnc.exists():
+        fnc.unlink()
+
     with Dataset(fnc, "w") as nc:
         values = np.arange(10)
         dim = nc4io.Dimension("bidule", values, np.float64, "m/s")
@@ -35,7 +38,7 @@ def test_dimension(allclose):
         assert allclose(values.shape, d.size)
 
         times = pd.date_range("2001-01-01", "2010-12-01", freq="MS")
-        tdim = nc4io.TimeDimension(times)
+        tdim = nc4io.TimeDimension("time", times)
         tdim.to_dataset(nc)
         assert "time" in nc.dimensions
 
@@ -69,6 +72,9 @@ def test_dimension(allclose):
 
 def test_add_known_dimensions(allclose):
     fnc = FHERE / "test_add_known_dimension.nc"
+    if fnc.exists():
+        fnc.unlink()
+
     with Dataset(fnc, "w") as nc:
         times = pd.date_range("2001-01-01", "2010-12-01", freq="MS")
         lons = np.linspace(110, 140, 10)
@@ -91,6 +97,9 @@ def test_add_known_dimensions(allclose):
 
 def test_add_generic_dimensions(allclose):
     fnc = FHERE / "test_add_generic_dimension.nc"
+    if fnc.exists():
+        fnc.unlink()
+
     with Dataset(fnc, "w") as nc:
         siteids = ["a", "b", "c", "d"]
         variables = ["v1", "v2", "v3"]
@@ -108,6 +117,9 @@ def test_add_generic_dimensions(allclose):
 
 def test_variable(allclose):
     fnc = FHERE / "test_variable.nc"
+    if fnc.exists():
+        fnc.unlink()
+
     with Dataset(fnc, "w") as nc:
         lons = np.linspace(110, 140, 10)
         lats = np.linspace(-40, -10, 10)

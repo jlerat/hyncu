@@ -59,7 +59,7 @@ def test_example(allclose):
         variables = ["v1", "v2", "v3", "v4"]
         units = ["mm.day-1", "m3.s-1", "degC", "kg"]
 
-        # Define times
+        # Define data index
         times = pd.date_range("1990-01-01", "2000-12-31", freq="D")
 
         # Configure netcdf file
@@ -68,7 +68,7 @@ def test_example(allclose):
                     stationids=stationids, \
                     variables=variables, \
                     units=units, \
-                    times=times, \
+                    index=times, \
                     dataset_name=dataset_name)
 
         # store data for each station
