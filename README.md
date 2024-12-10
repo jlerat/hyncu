@@ -48,16 +48,18 @@ with Dataset(fnc, "w") as nc:
 
     # Define list of stations with meta data (random here)
     stationids = ["sta1", "sta2", "sta3"]
-    names = ["".join([letters[i] \
-                                for i in np.random.randint(0, 26, 10)]) \
+    names = ["".join([letters[i] for i in np.random.randint(0, 26, 10)])
                                     for s in stationids]
     lons = np.random.uniform(110, 150, len(stationids))
     lats = np.random.uniform(-50, -10, len(stationids))
-    df = pd.DataFrame({"NAME": names, "LONGITUDE": lons, "LATITUDE": lats}, \
-                        index=stationids)
+    info = pd.DataFrame({
+        "NAME": names, 
+        "LONGITUDE": lons, 
+        "LATITUDE": lats
+        }, index=stationids)
 
     # Store stations meta data
-    nc4sd.set_station_data(grp, df)
+    nc4sd.set_data_stations(grp, info)
 
     # Define data variables and their units
     variables = ["v1", "v2", "v3", "v4"]
@@ -67,25 +69,25 @@ with Dataset(fnc, "w") as nc:
     times = pd.date_range("1990-01-01", "2000-12-31", freq="D")
 
     # Configure netcdf file
-    dataset_name = "important_dataframe_stuff"
-    nc4sd.add_variables(grp, \
-                stationids=stationids, \
-                variables=variables, \
-                units=units, \
-                index=times, \
-                dataset_name=dataset_name)
+    dataset_name = "important_data"
+    nc4sd.add_variables(grp, 
+                        stationids=stationids, 
+                        variables=variables, 
+                        units=units, 
+                        index=times, 
+                        dataset_name=dataset_name)
 
     # store data for each station
     for stationid in stationids:
         data  = np.random.uniform(0, 1, (len(times), len(variables)))
-        nc4sd.set_data(grp, dataset_name, stationid, data)
+        nc4sd.set_data_single_site(grp, dataset_name, stationid, data)
 
     # Retrieve station meta data
-    df = nc4sd.get_station_data(grp)
+    info = nc4sd.get_data_stations(grp)
 
     # Retrieve station data
     for stationid in stationids:
-        d = nc4sd.get_data(grp, dataset_name, stationid)
+        d = nc4sd.get_data_single_site(grp, dataset_name, stationid)
 ```
 
 ## Attribution
