@@ -123,7 +123,8 @@ def test_stations(allclose):
         nc4sd.set_station_data(nc, df)
 
         # Add a second dataset
-        nc4sd.set_station_data(nc, df, "stations_bis")
+        df_bis = df.copy().drop(["NAME", "LONGITUDE"], axis=1)
+        nc4sd.set_station_data(nc, df_bis, "stations_bis")
 
     with Dataset(fnc, "r") as nc:
         df2 = nc4sd.get_station_data(nc)
@@ -131,7 +132,8 @@ def test_stations(allclose):
         assert allclose(df2.iloc[:, :4].values, df.iloc[:, :4].values, atol=1e-6)
 
         df3 = nc4sd.get_station_data(nc, "stations_bis")
-        assert df3.shape == df.shape
+        assert df3.shape[0] == df.shape[0]
+        assert df3.shape[1] == df.shape[1]-2
 
     fnc.unlink()
 

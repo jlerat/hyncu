@@ -11,7 +11,7 @@ from netCDF4 import Dataset
 
 from hyncu import nc4io
 
-STATION_DATASET_NAME = "stations"
+DEFAULT_STATION_DATASET_NAME = "stations"
 EXPECTED_STATIONS_COLUMNS = ["NAME", "LONGITUDE", "LATITUDE"]
 
 TEXT_DATA_LABEL = "text"
@@ -251,8 +251,9 @@ def set_station_ids(ncdset: Dataset, stations: pd.DataFrame) -> None:
 def set_station_data(ncdset: Dataset,
                      stations: pd.DataFrame,
                      station_dataset_name:
-                     Optional[str] = STATION_DATASET_NAME) -> None:
-    check_expected_stations_columns(stations.columns)
+                     Optional[str] = DEFAULT_STATION_DATASET_NAME) -> None:
+    if station_dataset_name == DEFAULT_STATION_DATASET_NAME:
+        check_expected_stations_columns(stations.columns)
     set_station_ids(ncdset, stations)
     check_datasetname(station_dataset_name)
 
@@ -267,7 +268,7 @@ def set_station_data(ncdset: Dataset,
 
 def get_station_data(ncdset: Dataset,
                      station_dataset_name:
-                     Optional[str] = STATION_DATASET_NAME) -> pd.DataFrame:
+                     Optional[str] = DEFAULT_STATION_DATASET_NAME) -> pd.DataFrame:
     df = []
     stationids = ncdset["stationid"][:]
     for dlabel in [NUMERICAL_DATA_LABEL, TEXT_DATA_LABEL]:
