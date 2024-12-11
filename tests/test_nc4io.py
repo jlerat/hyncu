@@ -146,3 +146,4 @@ def test_variable(allclose):
         assert allclose(d, data, atol=1e-5, equal_nan=True)
 
     fnc.unlink()
+

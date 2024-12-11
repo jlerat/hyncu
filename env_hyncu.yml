@@ -6,9 +6,11 @@ dependencies:
   - cf-units=3.3.0
   - flake8=7.1.1
   - matplotlib=3.8.4
+  - mypy=1.13.0
   - netcdf4=1.6.4
   - numpy=1.26.4
   - pandas=2.2.1
+  - pandas-stubs=2.2.3.241126
   - pip
   - pytest=7.2.0
   - pytest-cov

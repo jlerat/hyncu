@@ -7,9 +7,9 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from datetime import datetime
-import cf_units
+import cf_units # type: ignore
 
-import netCDF4
+import netCDF4 # type: ignore
 from netCDF4 import Dataset
 
 TIME_UNITS = "minutes since 1900-01-01 00:00:00"
@@ -42,8 +42,8 @@ def date2num(times: pd.DatetimeIndex) -> np.ndarray:
     """ Function to convert pandas datetime to numerical
     values.
     """
-    times = times.to_pydatetime()
-    nums = netCDF4.date2num(times, TIME_UNITS)
+    times_py = times.to_pydatetime()
+    nums = netCDF4.date2num(times_py, TIME_UNITS)
     return nums
 
 
