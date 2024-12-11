@@ -7,9 +7,9 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from datetime import datetime
-import cf_units # type: ignore
+import cf_units
 
-import netCDF4 # type: ignore
+import netCDF4
 from netCDF4 import Dataset
 
 TIME_UNITS = "minutes since 1900-01-01 00:00:00"
