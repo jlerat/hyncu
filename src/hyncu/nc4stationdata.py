@@ -306,7 +306,7 @@ def read_station_info(ncdset: Dataset,
         dset = station_data_name(station_dataset_name, dlabel)
         array = read_from_nc(ncdset, dset)
         colnames = get_dataset_column_names(ncdset, dset,
-                                            dlabel==NUMERICAL_DATA_LABEL)
+                                            dlabel == NUMERICAL_DATA_LABEL)
         info.append(pd.DataFrame(array, index=stationids, columns=colnames))
 
     return pd.concat(info, axis=1), attrs
