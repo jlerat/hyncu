@@ -125,7 +125,7 @@ def test_variable(allclose):
         lats = np.linspace(-40, -10, 10)
         nc4io.add_dimensions(nc, longitude=lons, latitude=lats)
 
-        attrs = {"comment": "bidule"}
+        attrs = {"comment": "bidule", "data_provider": "yo"}
         nvar = nc4io.Variable("bidule", ["latitude", "longitude"], \
                     units="mm.month-1", \
                     attrs=attrs)
@@ -136,20 +136,14 @@ def test_variable(allclose):
 
     with Dataset(fnc, "r") as nc:
         v = nc["bidule"]
-        assert v.comment=="bidule"
-        assert v.units=="mm.month-1"
+        assert v.comment == "bidule"
+        assert v.data_provider == "yo"
+        assert len(v.author)>0
+        assert len(v.version)>0
+        assert len(v.source_file)>0
+        assert v.units == "mm.month-1"
         d = v[:].filled()
         assert allclose(d, data, atol=1e-5, equal_nan=True)
 
     fnc.unlink()
 
-
-def test_meta(allclose):
-    fnc = FHERE / "test_meta.nc"
-    with Dataset(fnc, "w") as nc:
-        nc4io.add_meta(nc, author="ma pomme")
-
-    with Dataset(fnc, "r") as nc:
-        assert nc.author == "ma pomme"
-
-    fnc.unlink()
