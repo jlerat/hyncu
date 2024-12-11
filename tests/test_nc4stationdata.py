@@ -134,6 +134,9 @@ def test_stations(allclose):
         assert df2.shape == df.shape
         assert allclose(df2.iloc[:, :4].values, df.iloc[:, :4].values, atol=1e-6)
 
+        # Test unit is not added to text columns
+        assert "NAME" in df2.columns
+
         df3, attrs = nc4sd.read_station_info(nc, "stations_bis")
         assert df3.shape[0] == df.shape[0]
         assert df3.shape[1] == df.shape[1]-2

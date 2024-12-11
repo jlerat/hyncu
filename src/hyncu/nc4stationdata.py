@@ -84,12 +84,13 @@ def read_from_nc(ncdset: Dataset, variable_name):
     return ncdset[variable_name][:]
 
 
-def get_dataset_column_names(ncdset: Dataset, dataset_name: str) -> list:
+def get_dataset_column_names(ncdset: Dataset, dataset_name: str,
+                             add_units: Optional[bool] = True) -> list:
     varnames = read_from_nc(ncdset, data_variable_name(dataset_name))
     units = read_from_nc(ncdset, data_unit_name(dataset_name))
     colnames = []
     for v, u in zip(varnames, units):
-        cn = f"{v}[{u}]"
+        cn = f"{v}[{u}]" if add_units else v
         colnames.append(cn)
     return colnames
 
@@ -304,7 +305,8 @@ def read_station_info(ncdset: Dataset,
     for dlabel in [NUMERICAL_DATA_LABEL, TEXT_DATA_LABEL]:
         dset = station_data_name(station_dataset_name, dlabel)
         array = read_from_nc(ncdset, dset)
-        colnames = get_dataset_column_names(ncdset, dset)
+        colnames = get_dataset_column_names(ncdset, dset,
+                                            dlabel==NUMERICAL_DATA_LABEL)
         info.append(pd.DataFrame(array, index=stationids, columns=colnames))
 
     return pd.concat(info, axis=1), attrs
