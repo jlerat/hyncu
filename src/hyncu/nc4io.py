@@ -12,7 +12,8 @@ import cf_units
 import netCDF4
 from netCDF4 import Dataset
 
-TIME_UNITS = "minutes since 1900-01-01 00:00:00"
+TIME_ORIGIN = "1900"
+TIME_UNITS = f"minutes since {TIME_ORIGIN}-01-01 00:00:00"
 TIME_DTYPE = np.int64
 DEFAULT_MISSING_VALUE = -99999.0
 DEFAULT_SIGNIFICANT_DIGIT = 5
