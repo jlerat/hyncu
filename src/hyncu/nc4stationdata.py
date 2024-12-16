@@ -383,4 +383,7 @@ def read_data_single_station(ncdset: Dataset,
         var_ok = df.notnull().any(axis=0)
         df = df.loc[index_ok, var_ok]
 
+        if 0 in df.shape:
+            raise ValueError("No station data.")
+
     return df, attrs

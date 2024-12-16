@@ -25,7 +25,7 @@ def test_dataframe(index_type):
         fnc.unlink()
 
     with Dataset(fnc, "w") as nc:
-        stationids = ["a", "b", "c"]
+        stationids = ["a", "b", "c", "d"]
         variables = ["v1", "v2", "v3", "v4"]
 
         if index_type == "time":
@@ -96,6 +96,9 @@ def test_dataframe(index_type):
 
         df4, attrs = nc4sd.read_data_single_station(nc, dataname, "b")
         assert df4.shape == df2.shape
+
+        with pytest.raises(ValueError, match="No station data"):
+            nc4sd.read_data_single_station(nc, dataname, "d")
 
     fnc.unlink()
 
