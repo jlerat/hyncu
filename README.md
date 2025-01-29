@@ -6,8 +6,8 @@
 Minimalistic wrapper around netCDF4 written in pure python.
 
 # What is hyncu
-This package provides a simple interface to add data to a netcdf4 including file with a
-minimalistic interface. implements the Quadratic Solution of the Approximate Reservoir 
+This package provides a simple interface to add data to a netcdf4 file with a
+minimalistic interface.
 
 # Installation
 - Create a suitable python environment. We recommend using [miniconda](https://docs.conda.io/projects/miniconda/en/latest/) combined with the environment specification provided in the [env\_hyncu.yml] (env_hyncu.yml) file in this repository.
