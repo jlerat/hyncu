@@ -10,6 +10,8 @@
 *.o
 .coverage
 coverage.xml
+coverage.json
+coverage.txt
 build
 hyncu.egg-info
 nosetests.xml

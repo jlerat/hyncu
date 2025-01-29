@@ -1,5 +1,7 @@
 # hyncu
 
+![Coverage](https://img.shields.io/badge/dynamic/json?color=green&label=Coverage&query=$.files[%27coverage.json%27].content&url=https://api.github.com/gists/ac215c8da8794b3ce3ec08eeea47837c)
+
 Minimalistic wrapper around netCDF4 written in pure python.
 
 # What is hyncu
