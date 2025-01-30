@@ -55,14 +55,14 @@ jobs:
       
       - name: Parse coverage report
         run: |
-          python -c "import xml.etree.ElementTree as ET; coverage = float(ET.parse('coverage.xml').getroot().get('line-rate')) * 100; print(f'{round(coverage)}%')" > coverage.txt
+          python -c "import xml.etree.ElementTree as ET; coverage = float(ET.parse('coverage.xml').getroot().get('line-rate')) * 100; print(f'{round(coverage)}%')" > coverage-value.txt
           python -c "with open('coverage.txt') as f: cov = f.read(); import re; cov = float(re.sub('[^\d\.]', '', cov)); color = 'red' if cov < 80 else ('orange' if cov < 90 else 'green'); print(color)" > coverage-color.txt 
 
       - name: Update gist badge content
         run: |
-          echo "{\"files\": {\"coverage.json\": {\"content\": \"$(cat coverage.txt)\"}}}" > coverage.json
+          echo "{\"files\": {\"coverage-value.json\": {\"content\": \"$(cat coverage-value.txt)\"}}}" > coverage-value.json
           curl -X PATCH -H "Authorization: token ${{ secrets.COVERAGE_GIST_TOKEN }}" \
-                -d @coverage.json \
+                -d @coverage-value.json \
                 "https://api.github.com/gists/${{ secrets.COVERAGE_GIST_ID }}"
 
       - name: Update gist badge color
