@@ -12,6 +12,7 @@
 coverage.xml
 coverage.json
 coverage.txt
+color.txt
 build
 hyncu.egg-info
 nosetests.xml

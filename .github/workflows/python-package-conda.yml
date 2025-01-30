@@ -56,13 +56,22 @@ jobs:
       - name: Parse coverage report
         run: |
           python -c "import xml.etree.ElementTree as ET; coverage = float(ET.parse('coverage.xml').getroot().get('line-rate')) * 100; print(f'{round(coverage)}%')" > coverage.txt
+          python -c "with open('coverage.txt') as f: cov = f.read(); import re; cov = float(re.sub('[^\d\.]', '', cov)); color = 'red' if cov < 80 else 'green'; print(color)" > color.txt 
 
-      - name: Update gist
+      - name: Update gist badge content
         run: |
           echo "{\"files\": {\"coverage.json\": {\"content\": \"$(cat coverage.txt)\"}}}" > coverage.json
           curl -X PATCH -H "Authorization: token ${{ secrets.COVERAGE_GIST_TOKEN }}" \
                 -d @coverage.json \
                 "https://api.github.com/gists/${{ secrets.COVERAGE_GIST_ID }}"
+
+      - name: Update gist badge color
+        run: |
+          echo "{\"files\": {\"coverage_color.json\": {\"content\": \"$(cat color.txt)\"}}}" > coverage_color.json
+          curl -X PATCH -H "Authorization: token ${{ secrets.COVERAGE_GIST_TOKEN }}" \
+                -d @coverage.json \
+                "https://api.github.com/gists/${{ secrets.COLOR_COLOR_GIST_ID }}"
+
 
       - name: Upload pytest test log files
         uses: actions/upload-artifact@v3
