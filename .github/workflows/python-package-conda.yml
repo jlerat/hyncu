@@ -67,9 +67,9 @@ jobs:
 
       - name: Update gist badge color
         run: |
-          echo "{\"files\": {\"coverage_color.json\": {\"content\": \"$(cat color.txt)\"}}}" > coverage_color.json
+          echo "{\"files\": {\"coverage-color.json\": {\"content\": \"$(cat color.txt)\"}}}" > coverage_color.json
           curl -X PATCH -H "Authorization: token ${{ secrets.COVERAGE_GIST_TOKEN }}" \
-                -d @coverage_color.json \
+                -d @coverage-color.json \
                 "https://api.github.com/gists/${{ secrets.COVERAGE_COLOR_GIST_ID }}"
 
 
