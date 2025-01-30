@@ -70,7 +70,7 @@ jobs:
           echo "{\"files\": {\"coverage-color.json\": {\"content\": \"$(cat coverage-color.txt)\"}}}" > coverage-color.json
           curl -X PATCH -H "Authorization: token ${{ secrets.COVERAGE_GIST_TOKEN }}" \
                 -d @coverage-color.json \
-                "https://api.github.com/gists/${{ secrets.COVERAGE_COLOR_GIST_ID }}"
+                "https://api.github.com/gists/${{ secrets.COVERAGE_GIST_ID }}"
 
 
       - name: Upload pytest test log files
