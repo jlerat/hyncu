@@ -56,7 +56,7 @@ jobs:
       - name: Parse coverage report
         run: |
           python -c "import xml.etree.ElementTree as ET; coverage = float(ET.parse('coverage.xml').getroot().get('line-rate')) * 100; print(f'{round(coverage)}%')" > coverage-value.txt
-          python -c "with open('coverage.txt') as f: cov = f.read(); import re; cov = float(re.sub('[^\d\.]', '', cov)); color = 'red' if cov < 80 else ('orange' if cov < 90 else 'green'); print(color)" > coverage-color.txt 
+          python -c "with open('coverage-value.txt') as f: cov = f.read(); import re; cov = float(re.sub('[^\d\.]', '', cov)); color = 'red' if cov < 70 else ('orange' if cov < 80 else ('lightgreen' if cov <95 else 'green')); print(color)" > coverage-color.txt 
 
       - name: Update gist badge content
         run: |
