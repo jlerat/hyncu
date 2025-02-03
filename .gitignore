@@ -9,6 +9,7 @@
 *.mod
 *.o
 *.svg
+*.json
 .coverage
 coverage.xml
 coverage.json
