@@ -8,6 +8,7 @@
 *.pstats
 *.mod
 *.o
+*.svg
 .coverage
 coverage.xml
 coverage.json
