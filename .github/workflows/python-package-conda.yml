@@ -61,8 +61,9 @@ jobs:
 
       - name: Update gist badge
         run: |
+          echo "{\"files\": {\"coverage_badge.svg\": {\"content\": \"$(cat coverage_badge.svg)\"}}}" > coverage_badge.json
           curl -X PATCH -H "Authorization: token ${{ secrets.COVERAGE_GIST_TOKEN }}" \
-                -d @coverage_badge.svg \
+                -d @coverage_badge.json \
                 "https://api.github.com/gists/${{ secrets.COVERAGE_GIST_ID }}"
 
       - name: Upload pytest test log files
