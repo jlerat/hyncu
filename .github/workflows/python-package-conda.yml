@@ -53,34 +53,28 @@ jobs:
           echo "--- hyncu test : located in $PWD ---"
           pytest --cov=hyncu --cov-report=xml --cov-report=html --cov-report=term-missing tests
       
-      - name: Parse coverage report
+      - name: Parse coverage report and create badge
         run: |
-          python -c "import xml.etree.ElementTree as ET; coverage = float(ET.parse('coverage.xml').getroot().get('line-rate')) * 100; print(f'{round(coverage)}%')" > coverage-value.txt
-          python -c "with open('coverage-value.txt') as f: cov = f.read(); import re; cov = float(re.sub('[^\d\.]', '', cov)); color = 'red' if cov < 70 else ('orange' if cov < 80 else ('lightgreen' if cov <95 else 'green')); print(color)" > coverage-color.txt 
+          source $CONDA/etc/profile.d/conda.sh
+          conda activate env_hyncu
+          python -c "import xml.etree.ElementTree as ET; from anybadge import Badge; cov = float(ET.parse('coverage.xml').getroot().get('line-rate')) * 100; covbadge = Badge('Coverage', value=f'{cov:0.0f}%', thresholds={60:'red', 70:'orange', 80:'lightgreen', 90:'green'}); covbadge.write_badge('coverage_badge.svg', True)"
 
-      - name: Update gist badge content
+      - name: Update gist badge
         run: |
-          echo "{\"files\": {\"coverage-value.json\": {\"content\": \"$(cat coverage-value.txt)\"}}}" > coverage-value.json
+          sed 's/\"/\\\"/g' coverage_badge.svg > coverage_badge.txt
+          echo "{\"files\": {\"coverage_badge.svg\": {\"content\": \"$(cat coverage_badge.txt)\"}}}" > coverage_badge.json
           curl -X PATCH -H "Authorization: token ${{ secrets.COVERAGE_GIST_TOKEN }}" \
-                -d @coverage-value.json \
+                -d @coverage_badge.json \
                 "https://api.github.com/gists/${{ secrets.COVERAGE_GIST_ID }}"
-
-      - name: Update gist badge color
-        run: |
-          echo "{\"files\": {\"coverage-color.json\": {\"content\": \"$(cat coverage-color.txt)\"}}}" > coverage-color.json
-          curl -X PATCH -H "Authorization: token ${{ secrets.COVERAGE_GIST_TOKEN }}" \
-                -d @coverage-color.json \
-                "https://api.github.com/gists/${{ secrets.COVERAGE_GIST_ID }}"
-
 
       - name: Upload pytest test log files
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: pytest-logs
           path: tests/*.log
 
       - name: Upload coverage report
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: pytest-coverage
           path: htmlcov/*.*

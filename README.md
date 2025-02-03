@@ -1,7 +1,7 @@
 # hyncu
 
 [![Tests](https://github.com/jlerat/hyncu/actions/workflows/python-package-conda.yml/badge.svg)](https://github.com/jlerat/hyncu/actions/workflows/python-package-conda.yml)
-![Coverage](https://img.shields.io/badge/dynamic/json?color=$.files[%27coverage-color.json%27].content&label=Coverage&query=$.files[%27coverage-value.json%27].content&url=https://api.github.com/gists/ac215c8da8794b3ce3ec08eeea47837c)
+![Coverage](https://gist.githubusercontent.com/jlerat/7ec5d1842cdd8ac006db3a2393113299/raw/coverage_badge.svg)
 
 Minimalistic wrapper around netCDF4 written in pure python.
 
