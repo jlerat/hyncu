@@ -42,29 +42,35 @@ def test_dataframe(index_type):
         dataname = "truc"
         units = ["mm.day-1", "m3.s-1", "degC", "kg"]
         attrs = {"author": "me"}
-        nc4sd.add_station_info_variables(nc, stationids=stationids,
-                            info_variable_names=variable_names,
-                            units=units,
-                            index=index,
-                            dataset_name=dataname,
-                            attrs=attrs)
+        svar = nc4sd.StationVariable(nc, dataname,
+                                     stationids=stationids,
+                                     index=index,
+                                     column_names=variable_names,
+                                     column_units=units,
+                                     attrs=attrs)
 
-        assert "index" in nc.dimensions
-        assert "stationid" in nc.dimensions
-        assert f"{dataname}{SEP}variable_name" in nc.dimensions
-        assert f"{dataname}{SEP}variable_unit" in nc.variables
-        assert dataname in nc.variables
-        assert nc[dataname].author == "me"
+        assert nc4sd.STATION_DATA_INDEX_DIMENSION_NAME in nc.dimensions
+        assert nc4sd.STATIONID_DIMENSION_NAME in nc.dimensions
+
+        dlabel = nc4sd.NUMERICAL_DATA_LABEL
+        colvarname = nc4sd.column_variable_ncname(dataname, dlabel)
+        assert colvarname in nc.dimensions
+        assert colvarname in nc.variables
+
+        unitname = nc4sd.unit_variable_ncname(dataname, dlabel)
+        assert unitname in nc.variables
+
+        varname = nc4sd.station_variable_ncname(dataname, dlabel)
+        assert varname in nc.variables
+
+        assert nc[varname].author == "me"
 
         size = (len(index), len(variable_names))
         cols = [f"{v}[{u}]" for v, u in zip(variable_names, units)]
         df = pd.DataFrame(np.random.uniform(-1, 1, size=size), \
                                 index=index, columns=cols)
 
-        with pytest.raises(ValueError, match="Dataset name"):
-            nc4sd.read_data_from_single_station(nc, dataname+SEP, "a", df)
-
-        nc4sd.write_data_for_single_station(nc, dataname, "a", df)
+        svar.write_data_for_single_station("a", df)
 
         # Set partial dataset
         df2 = df.iloc[:len(df)//2, :2]

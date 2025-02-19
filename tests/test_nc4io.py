@@ -79,7 +79,9 @@ def test_add_known_dimensions(allclose):
         times = pd.date_range("2001-01-01", "2010-12-01", freq="MS")
         lons = np.linspace(110, 140, 10)
         lats = np.linspace(-40, -10, 10)
-        nc4io.add_dimensions(nc, time=times, longitude=lons, latitude=lats)
+        nc4io.add_dimension(nc, "time", times)
+        nc4io.add_dimension(nc, "longitude", lons)
+        nc4io.add_dimension(nc, "latitude", lats)
 
     with Dataset(fnc, "r") as nc:
         tdim = nc4io.TimeDimension.from_dataset(nc)
@@ -124,7 +126,8 @@ def test_add_generic_dimensions(allclose):
     with Dataset(fnc, "w") as nc:
         siteids = ["a", "b", "c", "d"]
         variables = ["v1", "v2", "v3"]
-        nc4io.add_dimensions(nc, siteid=siteids, variable=variables)
+        nc4io.add_dimension(nc, "siteid", siteids)
+        nc4io.add_dimension(nc, "variable", variables)
 
     with Dataset(fnc, "r") as nc:
         dim = nc4io.Dimension.from_dataset(nc, "siteid")
@@ -142,20 +145,18 @@ def test_variable(allclose):
         fnc.unlink()
 
     with Dataset(fnc, "w") as nc:
-        lons = np.linspace(110, 140, 10)
-        lats = np.linspace(-40, -10, 10)
-
         dims = OrderedDict()
-        dims["latitude"] = lats
-        dims["longitude"] = lons
-
+        dims["latitude"] = np.linspace(-40, -10, 10)
+        dims["longitude"] = np.linspace(110, 140, 10)
         attrs = {"comment": "bidule", "data_provider": "yo"}
         nvar = nc4io.Variable(nc, "bidule",
                               dimensions=dims,
                               units="mm.month-1",
                               attrs=attrs)
-        nvar.write_variable_to_dataset()
-        data = np.random.uniform(size=(len(lats), len(lons)))
+
+        nlats = len(dims["latitude"])
+        nlons = len(dims["longitude"])
+        data = np.random.uniform(size=(nlats, nlons))
         data.flat[:5] = np.nan
         nvar.write_data_to_dataset(data)
 
@@ -166,8 +167,7 @@ def test_variable(allclose):
 
 
     with Dataset(fnc, "r") as nc:
-        nvar = nc4io.Variable(nc, "bidule")
-        v = nvar.read_data_from_dataset()
+        v = nc["bidule"]
         assert v.comment == "bidule"
         assert v.data_provider == "yo"
         assert len(v.author)>0
@@ -176,6 +176,9 @@ def test_variable(allclose):
         assert v.units == "mm.month-1"
         d = v[:].filled()
         assert allclose(d, data, atol=1e-5, equal_nan=True)
+
+        for n in ["latitude", "longitude"]:
+            assert allclose(nvar.dimensions[n], dims[n])
 
     fnc.unlink()
 
@@ -189,7 +192,6 @@ def test_spatialvariable(allclose):
         lons = np.linspace(110, 140, 10)
         lats = np.linspace(-40, -10, 10)
         nvar = nc4io.SpatialVariable(nc, "bidule", lons, lats)
-        nvar.write_variable_to_dataset()
         data = np.random.uniform(size=(len(lats), len(lons)))
         nvar.write_data_to_dataset(data)
 
@@ -213,7 +215,6 @@ def test_spatialtimevariable(allclose):
         lats = np.linspace(-40, -10, 10)
         times = pd.date_range("2001-01-01", "2001-04-30")
         nvar = nc4io.SpatialTimeVariable(nc, "bidule", lons, lats, times)
-        nvar.write_variable_to_dataset()
         data = np.random.uniform(size=(len(lats), len(lons), len(times)))
         nvar.write_data_to_dataset(data)
 

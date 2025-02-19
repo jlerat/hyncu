@@ -35,9 +35,7 @@ def test_example(allclose):
         # ---------------------------------
         # working with gridded data
 
-        grp = nc.createGroup("gridded")
-
-        # 0. Generate data to store
+        # 0. Generate random data to play with
         # .. dimensions
         lons = np.linspace(110, 140, 10)
         lats = np.linspace(-40, -10, 10)
@@ -45,33 +43,24 @@ def test_example(allclose):
         data = np.random.uniform(size=(len(lats), len(lons)))
 
         # I. Setup gridded data variable
-        dataset_name = "data_gridded"
+        grp = nc.createGroup("bunch_of_spatial_stuff")
+        dataset_name = "my_gridded_data"
         nvar = nc4io.SpatialVariable(grp, dataset_name,
                     longitudes=lons,
                     latitudes=lats,
                     units="mm.month-1", attrs=attrs)
-        # .. need to store the netcdf variable
-        nvar.write_variable_to_dataset()
 
-        # III. Store data. This is a netCDF4 command.
+        # II. Store data.
         nvar.write_data_to_dataset(data)
-
-        # Show netcdf file content
-        print(grp)
-        print(grp[dataset_name])
 
         # ---------------------------------
         # Working with data frames
 
-        grp = nc.createGroup("dataframe")
-
-        # 0. Generate data to store
-
+        # 0. Generate random data to play with
         # .. Random station informations
         stationids = ["sta1", "sta2", "sta3"]
         names = ["".join([letters[i] for i in np.random.randint(0, 26, 10)])
                  for s in stationids]
-
         lons = np.random.uniform(110, 150, len(stationids))
         lats = np.random.uniform(-50, -10, len(stationids))
         station_info = pd.DataFrame({
@@ -79,15 +68,12 @@ def test_example(allclose):
             "LONGITUDE": lons,
             "LATITUDE": lats
             }, index=stationids)
-
-        # .. Define station data variables and their units
+        # .. Define station info variables and their units
         info_variable_names = ["v1", "v2", "v3", "v4"]
         units = ["mm.day-1", "m3.s-1", "degC", "kg"]
-
         # .. Define station data index
         times = pd.date_range("1990-01-01", "2000-12-31", freq="D")
-
-        # .. random station data
+        # .. Generate random station data
         data = {}
         for stationid in stationids:
             data[stationid]  = np.random.uniform(0, 1,
@@ -95,9 +81,10 @@ def test_example(allclose):
                                                  len(info_variable_names)))
 
         # I. Store stations informations
+        grp = nc.createGroup("bunch_of_station_stuff")
         nc4sd.write_station_info(grp, station_info, attrs=attrs)
 
-        # II. Configure netcdf file
+        # II. Configure station info variables
         dataset_name = "station_data"
         nc4sd.add_station_info_variables(grp,
                             stationids=stationids,
