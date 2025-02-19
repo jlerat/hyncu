@@ -34,8 +34,9 @@ attrs = {
     }
 
 with Dataset(fnc, "w") as nc:
-    # ---------------------------------
+    # -----------------------------------------------------
     # working with gridded data
+    # -----------------------------------------------------
 
     grp = nc.createGroup("gridded")
 
@@ -47,23 +48,26 @@ with Dataset(fnc, "w") as nc:
     data = np.random.uniform(size=(len(lats), len(lons)))
 
     # I. define grid dimensions
-    nc4io.add_dimensions(grp, longitude=lons, latitude=lats)
+    nc4io.add_spatial_dimensions(grp, lons, lats)
 
     # II. Setup gridded data variable
     dataset_name = "data_gridded"
-    nvar = nc4io.Variable(dataset_name, ["latitude", "longitude"], \
+    nvar = nc4io.SpatialVariable(dataset_name, \
                 units="mm.month-1", attrs=attrs)
+    # .. need to store the netcdf variable
     nvar.to_dataset(grp)
 
     # III. Store data. This is a netCDF4 command.
     grp[dataset_name][:] = data
 
-    # ---------------------------------
-    # Working with data frames
+    # -----------------------------------------------------------
+    # Working with station data stored in data frames
+    # -----------------------------------------------------------
 
     grp = nc.createGroup("dataframe")
 
     # 0. Generate data to store
+
     # .. Random station informations
     stationids = ["sta1", "sta2", "sta3"]
     names = ["".join([letters[i] for i in np.random.randint(0, 26, 10)])
@@ -71,7 +75,7 @@ with Dataset(fnc, "w") as nc:
 
     lons = np.random.uniform(110, 150, len(stationids))
     lats = np.random.uniform(-50, -10, len(stationids))
-    info = pd.DataFrame({
+    station_info = pd.DataFrame({
         "NAME": names,
         "LONGITUDE": lons,
         "LATITUDE": lats
@@ -90,13 +94,13 @@ with Dataset(fnc, "w") as nc:
         data[stationid]  = np.random.uniform(0, 1, (len(times), len(variables)))
 
     # I. Store stations informations
-    nc4sd.write_station_info(grp, info, attrs=attrs)
+    nc4sd.write_station_info(grp, station_info, attrs=attrs)
 
     # II. Configure netcdf file
     dataset_name = "station_data"
-    nc4sd.add_variables(grp,
+    nc4sd.add_station_variables(grp,
                         stationids=stationids,
-                        variables=variables,
+                        variable_names=variable_names,
                         units=units,
                         index=times,
                         dataset_name=dataset_name,
@@ -105,14 +109,18 @@ with Dataset(fnc, "w") as nc:
     # III. store data for each station (random data)
     for stationid in stationids:
         dt = data[stationid]
-        nc4sd.write_data_single_station(grp, dataset_name, stationid, dt)
+        nc4sd.write_data_for_single_station(grp, dataset_name, stationid, dt)
 
     # IV. Retrieve station info
     info, _ = nc4sd.read_station_info(grp)
 
     # V. Retrieve data for each station
     for stationid in stationids:
-        d = nc4sd.read_data_single_station(grp, dataset_name, stationid)
+        d = nc4sd.read_data_from_single_station(grp, dataset_name, stationid)
+
+    # Show netcdf file content
+    print(grp)
+    print(grp[dataset_name])
 
 ```
 

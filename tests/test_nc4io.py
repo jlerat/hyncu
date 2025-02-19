@@ -1,6 +1,7 @@
 import math
 from pathlib import Path
 import pandas as pd
+from collections import OrderedDict
 
 import pytest
 
@@ -32,26 +33,25 @@ def test_dimension(allclose):
     with Dataset(fnc, "w") as nc:
         values = np.arange(10)
         dim = nc4io.Dimension("bidule", values, np.float64, "m/s")
-        dim.to_dataset(nc)
+        dim.write_dimension_to_dataset(nc)
         assert "bidule" in nc.dimensions
         d = nc.dimensions["bidule"]
         assert allclose(values.shape, d.size)
 
         times = pd.date_range("2001-01-01", "2010-12-01", freq="MS")
         tdim = nc4io.TimeDimension("time", times)
-        tdim.to_dataset(nc)
+        tdim.write_dimension_to_dataset(nc)
         assert "time" in nc.dimensions
 
         lons = np.linspace(110, 140, 10)
-        ldim = nc4io.CoordinateDimension(lons, "longitude")
-        ldim.to_dataset(nc)
+        ldim = nc4io.SpatialDimension(lons, "longitude")
+        ldim.write_dimension_to_dataset(nc)
         assert "longitude" in nc.dimensions
 
         lats = np.linspace(-40, -10, 10)
-        ldim = nc4io.CoordinateDimension(lats, "latitude")
-        ldim.to_dataset(nc)
+        ldim = nc4io.SpatialDimension(lats, "latitude")
+        ldim.write_dimension_to_dataset(nc)
         assert "latitude" in nc.dimensions
-
 
     with Dataset(fnc, "r") as nc:
         dim = nc4io.Dimension.from_dataset(nc, "bidule")
@@ -61,10 +61,10 @@ def test_dimension(allclose):
         diff = (tdim.values-times).seconds
         assert np.all(diff==0)
 
-        ldim = nc4io.CoordinateDimension.from_dataset(nc, "longitude")
+        ldim = nc4io.SpatialDimension.from_dataset(nc, "longitude")
         assert allclose(ldim.values, lons)
 
-        ldim = nc4io.CoordinateDimension.from_dataset(nc, "latitude")
+        ldim = nc4io.SpatialDimension.from_dataset(nc, "latitude")
         assert allclose(ldim.values, lats)
 
     fnc.unlink()
@@ -86,10 +86,31 @@ def test_add_known_dimensions(allclose):
         diff = (tdim.values-times).seconds
         assert np.all(diff==0)
 
-        ldim = nc4io.CoordinateDimension.from_dataset(nc, "longitude")
+        ldim = nc4io.SpatialDimension.from_dataset(nc, "longitude")
         assert allclose(ldim.values, lons)
 
-        ldim = nc4io.CoordinateDimension.from_dataset(nc, "latitude")
+        ldim = nc4io.SpatialDimension.from_dataset(nc, "latitude")
+        assert allclose(ldim.values, lats)
+
+    fnc.unlink()
+
+
+def test_add_spatial_dimensions(allclose):
+    fnc = FHERE / "test_add_spatial_dimension.nc"
+    if fnc.exists():
+        fnc.unlink()
+
+    with Dataset(fnc, "w") as nc:
+        times = pd.date_range("2001-01-01", "2010-12-01", freq="MS")
+        lons = np.linspace(110, 140, 10)
+        lats = np.linspace(-40, -10, 10)
+        nc4io.add_spatial_dimensions(nc, lons, lats)
+
+    with Dataset(fnc, "r") as nc:
+        ldim = nc4io.SpatialDimension.from_dataset(nc, "longitude")
+        assert allclose(ldim.values, lons)
+
+        ldim = nc4io.SpatialDimension.from_dataset(nc, "latitude")
         assert allclose(ldim.values, lats)
 
     fnc.unlink()
@@ -123,25 +144,83 @@ def test_variable(allclose):
     with Dataset(fnc, "w") as nc:
         lons = np.linspace(110, 140, 10)
         lats = np.linspace(-40, -10, 10)
-        nc4io.add_dimensions(nc, longitude=lons, latitude=lats)
+
+        dims = OrderedDict()
+        dims["latitude"] = lats
+        dims["longitude"] = lons
 
         attrs = {"comment": "bidule", "data_provider": "yo"}
-        nvar = nc4io.Variable("bidule", ["latitude", "longitude"], \
-                    units="mm.month-1", \
-                    attrs=attrs)
-        nvar.to_dataset(nc)
+        nvar = nc4io.Variable(nc, "bidule",
+                              dimensions=dims,
+                              units="mm.month-1",
+                              attrs=attrs)
+        nvar.write_variable_to_dataset()
         data = np.random.uniform(size=(len(lats), len(lons)))
         data.flat[:5] = np.nan
-        nc["bidule"][:] = data
+        nvar.write_data_to_dataset(data)
+
+        # Write data subset
+        idx = np.arange(3), np.arange(3)
+        nvar.write_data_to_dataset(-999, idx)
+        data[idx[0][:, None], idx[1][None, :]] = -999
+
 
     with Dataset(fnc, "r") as nc:
-        v = nc["bidule"]
+        nvar = nc4io.Variable(nc, "bidule")
+        v = nvar.read_data_from_dataset()
         assert v.comment == "bidule"
         assert v.data_provider == "yo"
         assert len(v.author)>0
         assert len(v.version)>0
         assert len(v.source_file)>0
         assert v.units == "mm.month-1"
+        d = v[:].filled()
+        assert allclose(d, data, atol=1e-5, equal_nan=True)
+
+    fnc.unlink()
+
+
+def test_spatialvariable(allclose):
+    fnc = FHERE / "test_spatialvariable.nc"
+    if fnc.exists():
+        fnc.unlink()
+
+    with Dataset(fnc, "w") as nc:
+        lons = np.linspace(110, 140, 10)
+        lats = np.linspace(-40, -10, 10)
+        nvar = nc4io.SpatialVariable(nc, "bidule", lons, lats)
+        nvar.write_variable_to_dataset()
+        data = np.random.uniform(size=(len(lats), len(lons)))
+        nvar.write_data_to_dataset(data)
+
+    with Dataset(fnc, "r") as nc:
+        v = nc["bidule"]
+        assert len(v.version)>0
+        assert len(v.source_file)>0
+        d = v[:].filled()
+        assert allclose(d, data, atol=1e-5, equal_nan=True)
+
+    fnc.unlink()
+
+
+def test_spatialtimevariable(allclose):
+    fnc = FHERE / "test_spatialtimevariable.nc"
+    if fnc.exists():
+        fnc.unlink()
+
+    with Dataset(fnc, "w") as nc:
+        lons = np.linspace(110, 140, 10)
+        lats = np.linspace(-40, -10, 10)
+        times = pd.date_range("2001-01-01", "2001-04-30")
+        nvar = nc4io.SpatialTimeVariable(nc, "bidule", lons, lats, times)
+        nvar.write_variable_to_dataset()
+        data = np.random.uniform(size=(len(lats), len(lons), len(times)))
+        nvar.write_data_to_dataset(data)
+
+    with Dataset(fnc, "r") as nc:
+        v = nc["bidule"]
+        assert len(v.version)>0
+        assert len(v.source_file)>0
         d = v[:].filled()
         assert allclose(d, data, atol=1e-5, equal_nan=True)
 

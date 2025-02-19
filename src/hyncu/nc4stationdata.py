@@ -53,41 +53,42 @@ def check_datasetname(dataset_name):
         raise ValueError(errmess)
 
 
-def data_variable_name(dataset_name):
+def ncvariable_name(dataset_name):
     return f"{dataset_name}{LABEL_SEPARATOR}variable_name"
 
 
-def station_data_name(station_dataset_name, dlabel):
+def station_data_ncname(station_dataset_name, dlabel):
     return f"{station_dataset_name}{LABEL_SEPARATOR}{dlabel}"
 
 
-def station_data_variable_name(station_dataset_name, dlabel):
-    sdn = station_data_name(station_dataset_name, dlabel)
-    return data_variable_name(sdn)
+def station_variable_ncname(station_dataset_name, dlabel):
+    sdn = station_data_ncname(station_dataset_name, dlabel)
+    return ncvariable_name(sdn)
 
 
-def data_unit_name(dataset_name):
+def unit_ncname(dataset_name):
     return f"{dataset_name}{LABEL_SEPARATOR}variable_unit"
 
 
-def station_data_unit_name(station_dataset_name, dlabel):
-    sdn = station_data_name(station_dataset_name, dlabel)
-    return data_unit_name(sdn)
+def station_unit_ncname(station_dataset_name, dlabel):
+    sdn = station_data_ncname(station_dataset_name, dlabel)
+    return unit_ncname(sdn)
 
 
 def read_from_nc(ncdset: Dataset, variable_name):
     if variable_name not in ncdset.variables:
         errmess = f"{variable_name} was not found in variables."\
-                    + " Make sure the function nc4dataframe.add_variables"\
-                    + " has been run."
+                  + " Make sure the function"\
+                  + "nc4dataframe.add_station_variables"\
+                  + " has been run."
         raise ValueError(errmess)
     return ncdset[variable_name][:]
 
 
-def get_dataset_column_names(ncdset: Dataset, dataset_name: str,
+def get_dataset_variable_names(ncdset: Dataset, dataset_name: str,
                              add_units: Optional[bool] = True) -> list:
-    varnames = read_from_nc(ncdset, data_variable_name(dataset_name))
-    units = read_from_nc(ncdset, data_unit_name(dataset_name))
+    varnames = read_from_nc(ncdset, ncvariable_name(dataset_name))
+    units = read_from_nc(ncdset, unit_ncname(dataset_name))
     colnames = []
     for v, u in zip(varnames, units):
         cn = f"{v}[{u}]" if add_units else v
@@ -95,51 +96,51 @@ def get_dataset_column_names(ncdset: Dataset, dataset_name: str,
     return colnames
 
 
-def add_variables(ncdset: Dataset,
-                  dataset_name: str,
-                  stationids: np.ndarray,
-                  variables: np.ndarray,
-                  index: np.ndarray,
-                  units: Optional[str] = None,
-                  attrs: Optional[dict] = None):
+def add_station_info_variables(ncdset: Dataset,
+                          dataset_name: str,
+                          stationids: np.ndarray,
+                          info_variable_names: np.ndarray,
+                          index: np.ndarray,
+                          units: Optional[str] = None,
+                          attrs: Optional[dict] = None):
 
     check_datasetname(dataset_name)
 
     # Create dimensions
-    kw = {data_variable_name(dataset_name): variables}
+    kw = {ncvariable_name(dataset_name): info_variable_names}
     nc4io.add_dimensions(ncdset, index=index, stationid=stationids, **kw)
 
-    # Create data variable
-    varnames = data_variable_name(dataset_name)
-    var = nc4io.Variable(dataset_name,
-                         ["stationid", "index", varnames],
-                         units="-",
-                         chunksizes=(1, min(10000, len(index)),
-                                     min(10, len(variables))),
-                         attrs=attrs)
-    var.to_dataset(ncdset)
+    # Create nc variable for station data
+    variable_name_nc = ncvariable_name(dataset_name)
+    data_var = nc4io.Variable(ncdset, dataset_name,
+                              dimensions=["stationid", "index", variable_name_nc],
+                              units="-",
+                              chunksizes=(1, min(10000, len(index)),
+                                          min(10, len(info_variable_names))),
+                              attrs=attrs)
+    data_var.write_variable_to_dataset()
 
-    # Units
-    units_var = nc4io.Variable(data_unit_name(dataset_name),
-                               [varnames],
+    # Create nc variable for Units
+    units_var = nc4io.Variable(ncdset, unit_ncname(dataset_name),
+                               dimensions=[variable_name_nc],
                                units="-",
                                dtype=str, fill_value="NA",
                                significant_digit=None,
                                compression=None,
                                attrs={"description":
                                       "Units for each data variable"})
-    units_var.to_dataset(ncdset)
+    units_var.write_variable_to_dataset()
     if units is None:
-        units = ["-"]*len(variables)
+        units = ["-"]*len(variable_names)
 
     units = np.array(units)
     validate_units(units)
 
-    if len(units) != len(variables):
-        errmess = f"Expected same number of variables ({len(variables)})"\
-                    f" and units ({len(units)})"
+    if len(units) != len(info_variable_names):
+        errmess = "Expected same number of variables "\
+                    f"({len(info_variable_names)}) and units ({len(units)})"
         raise ValueError(errmess)
-    ncdset[data_unit_name(dataset_name)][:] = units
+    units_var.write_data_to_dataset(units)
 
 
 def select_types(df: pd.DataFrame, dlabel: str) -> pd.DataFrame:
@@ -154,23 +155,23 @@ def select_types(df: pd.DataFrame, dlabel: str) -> pd.DataFrame:
 
 
 def check_expected_stations_columns(columns: list):
-    variables = [re.sub("\\[.*", "", cn) for cn in columns]
+    variable_names = [re.sub("\\[.*", "", cn) for cn in columns]
     for n in EXPECTED_STATIONS_COLUMNS:
-        if n not in variables:
-            errmess = f"{n} was expected in station variables"
+        if n not in variable_names:
+            errmess = f"{n} was expected in station variable_names"
             raise ValueError(errmess)
 
 
-def configure_stations_variables(ncdset: Dataset,
+def configure_stations_variable_names(ncdset: Dataset,
                                  station_dataset_name: str,
                                  info: pd.DataFrame, dlabel: str) -> None:
     variable_names = info.columns.str\
                      .replace("\\[.*", "", regex=True).values.astype(str)
 
-    vdim_name = station_data_variable_name(station_dataset_name, dlabel)
+    vdim_name = station_variable_ncname(station_dataset_name, dlabel)
     vdim = nc4io.Dimension(vdim_name, variable_names,
                            variable_names.dtype, "-")
-    vdim.to_dataset(ncdset)
+    vdim.write_dimension_to_dataset(ncdset)
 
     desc = "Variable storing the list of station meta data"\
            + f" for dataset {station_dataset_name}."
@@ -185,23 +186,22 @@ def configure_stations_units(ncdset: Dataset,
     else:
         cols = info.columns.str
         units = cols.replace(".*\\[|\\]$", "", regex=True).values.astype(str)
-        variables = cols.replace("\\[.*", "", regex=True).values.astype(str)
-        units[units == variables] = "-"
+        variable_names = cols.replace("\\[.*", "", regex=True).values.astype(str)
+        units[units == variable_names] = "-"
 
     validate_units(units)
 
-    uname = station_data_unit_name(station_dataset_name, dlabel)
-    vdim_name = station_data_variable_name(station_dataset_name, dlabel)
+    uname = station_unit_ncname(station_dataset_name, dlabel)
+    vdim_name = station_variable_ncname(station_dataset_name, dlabel)
     descr = "Variable storing station meta data units"\
             + f" for dataset {station_dataset_name}."
-    un = nc4io.Variable(uname, [vdim_name], units="-",
+    un = nc4io.Variable(ncdset, uname, [vdim_name], units="-",
                         dtype=units.dtype, fill_value="NA",
                         significant_digit=None,
                         compression=None,
                         attrs={"description": descr})
-    un.to_dataset(ncdset)
-    units = np.array(units)
-    ncdset[uname][:] = units
+    un.write_variable_to_dataset()
+    un.write_data_to_dataset(np.array(units))
 
 
 def write_stations_data_by_type(ncdset: Dataset,
@@ -219,27 +219,26 @@ def write_stations_data_by_type(ncdset: Dataset,
 
     dtype = values.dtype
     attrs = dict(description=f"Stations / {dlabel} data")
-    dset = station_data_name(station_dataset_name, dlabel)
-
-    vdim_name = station_data_variable_name(station_dataset_name,
-                                           dlabel)
-    var = nc4io.Variable(dset,
-                         ["stationid", vdim_name],
+    var_ncname = station_data_ncname(station_dataset_name, dlabel)
+    vdim_name = station_variable_ncname(station_dataset_name,
+                                        dlabel)
+    var = nc4io.Variable(ncdset, var_ncname,
+                         dimensions=["stationid", vdim_name],
                          units="-", dtype=dtype,
                          fill_value=fill_value,
                          significant_digit=digit,
                          chunksizes=values.shape,
                          compression=None,
                          attrs=attrs)
-    var.to_dataset(ncdset)
-    ncdset[dset][:] = values
+    var.write_data_to_dataset(values)
 
 
-def add_stationid_dimension(ncdset: Dataset, stations: pd.DataFrame) -> None:
-    stationids = np.array(stations.index.values).astype(str)
+def add_stationid_dimension(ncdset: Dataset,
+                            stationids: Union[list, pd.Index]) -> None:
+    stationids = np.array(stationids).astype(str)
     if "stationid" not in ncdset.dimensions:
         dim = nc4io.Dimension("stationid", stationids, stationids.dtype, "-")
-        dim.to_dataset(ncdset)
+        dim.write_dimension_to_dataset(ncdset)
     else:
         if not np.all(stationids == ncdset["stationid"][:]):
             errmess = "Station IDs should be identical to the one "\
@@ -257,14 +256,14 @@ def write_station_info(ncdset: Dataset,
 
     check_datasetname(station_dataset_name)
 
-    add_stationid_dimension(ncdset, info)
+    add_stationid_dimension(ncdset, info.index)
 
     attrs = nc4io.minimal_metadata(attrs)
 
     for dlabel in [TEXT_DATA_LABEL, NUMERICAL_DATA_LABEL]:
         info_type = select_types(info, dlabel)
 
-        configure_stations_variables(ncdset, station_dataset_name,
+        configure_stations_variable_names(ncdset, station_dataset_name,
                                      info_type, dlabel)
 
         configure_stations_units(ncdset, station_dataset_name,
@@ -274,7 +273,7 @@ def write_station_info(ncdset: Dataset,
                                     info_type, dlabel)
         # Set metadata
         attrs["data_type"] = dlabel
-        dset = station_data_name(station_dataset_name, dlabel)
+        dset = station_data_ncname(station_dataset_name, dlabel)
         for key, value in attrs.items():
             setattr(ncdset[dset], key, value)
 
@@ -293,9 +292,9 @@ def read_station_info(ncdset: Dataset,
                       Optional[str] =
                       DEFAULT_STATION_DATASET_NAME) -> pd.DataFrame:
     # Get attributes
-    dset = station_data_name(station_dataset_name, NUMERICAL_DATA_LABEL)
+    dset = station_data_ncname(station_dataset_name, NUMERICAL_DATA_LABEL)
     attrs = read_attributes(ncdset, dset)
-    for key in ["long_name", "standard_name", "data_type",
+    for key in ["long_name", "data_type",
                 "units", "_FillValue", "least_significant_digit"]:
         attrs.pop(key)
 
@@ -303,16 +302,16 @@ def read_station_info(ncdset: Dataset,
     info = []
     stationids = ncdset["stationid"][:]
     for dlabel in [NUMERICAL_DATA_LABEL, TEXT_DATA_LABEL]:
-        dset = station_data_name(station_dataset_name, dlabel)
+        dset = station_data_ncname(station_dataset_name, dlabel)
         array = read_from_nc(ncdset, dset)
-        colnames = get_dataset_column_names(ncdset, dset,
+        colnames = get_dataset_variable_names(ncdset, dset,
                                             dlabel == NUMERICAL_DATA_LABEL)
         info.append(pd.DataFrame(array, index=stationids, columns=colnames))
 
     return pd.concat(info, axis=1), attrs
 
 
-def write_data_single_station(ncdset: Dataset,
+def write_data_for_single_station(ncdset: Dataset,
                               dataset_name: str,
                               stationid: str,
                               data: pd.DataFrame) -> None:
@@ -333,11 +332,11 @@ def write_data_single_station(ncdset: Dataset,
         iindex_nc, iindex_data = get_item_index_from_dimension(ncdset,
                                                                "index",
                                                                index)
-        variables = [re.sub("\\[.*", "", cn) for cn in data.columns.values]
-        vname = data_variable_name(dataset_name)
+        variable_names = [re.sub("\\[.*", "", cn) for cn in data.columns.values]
+        dname = ncvariable_name(dataset_name)
         ivars_nc, ivars_data = get_item_index_from_dimension(ncdset,
-                                                             vname,
-                                                             variables)
+                                                             dname,
+                                                             variable_names)
     else:
         if data.shape != (nindex, nvars):
             errmess = f"Expected data of size ({nindex}, {nvars}), "\
@@ -354,7 +353,7 @@ def write_data_single_station(ncdset: Dataset,
     ncdset[dataset_name][istation, iindex_nc, ivars_nc] = tostore
 
 
-def read_data_single_station(ncdset: Dataset,
+def read_data_from_single_station(ncdset: Dataset,
                              dataset_name: str,
                              stationid: str,
                              clip: Optional[bool] = True):
@@ -369,7 +368,7 @@ def read_data_single_station(ncdset: Dataset,
                                                 [stationid])
     # Build dataframe
     istation = istation[0]
-    colnames = get_dataset_column_names(ncdset, dataset_name)
+    colnames = get_dataset_variable_names(ncdset, dataset_name)
     index = read_from_nc(ncdset, "index")
     istime = ncdset["index"].dimension_type == "time"
     if istime:
