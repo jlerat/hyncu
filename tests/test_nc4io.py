@@ -2,6 +2,7 @@ import math
 from pathlib import Path
 import pandas as pd
 from collections import OrderedDict
+from string import ascii_letters as letters
 
 import pytest
 
@@ -139,7 +140,10 @@ def test_add_generic_dimensions(allclose):
     fnc.unlink()
 
 
-def test_variable(allclose):
+@pytest.mark.parametrize("compression", [None, "zlib"])
+@pytest.mark.parametrize("fill_value", [None, -999.])
+@pytest.mark.parametrize("chunksizes", [None, (2, 2)])
+def test_variable(compression, fill_value, chunksizes, allclose):
     fnc = FHERE / "test_variable.nc"
     if fnc.exists():
         fnc.unlink()
@@ -152,6 +156,9 @@ def test_variable(allclose):
         nvar = nc4io.Variable(nc, "bidule",
                               dimensions=dims,
                               units="mm.month-1",
+                              compression=compression,
+                              fill_value=fill_value,
+                              chunksizes=chunksizes,
                               attrs=attrs)
 
         nlats = len(dims["latitude"])
@@ -165,9 +172,16 @@ def test_variable(allclose):
         nvar.write_data_to_dataset(-999, idx)
         data[idx[0][:, None], idx[1][None, :]] = -999
 
-
     with Dataset(fnc, "r") as nc:
         v = nc["bidule"]
+        if fill_value is None:
+            assert np.isnan(v._FillValue)
+        else:
+            assert v._FillValue == fill_value
+        if chunksizes is None:
+            assert v.chunking() in ["contiguous", [10, 10]]
+        else:
+            assert allclose(v.chunking(), chunksizes)
         assert v.comment == "bidule"
         assert v.data_provider == "yo"
         assert len(v.author)>0
@@ -197,8 +211,8 @@ def test_spatialvariable(allclose):
 
     with Dataset(fnc, "r") as nc:
         v = nc["bidule"]
-        assert len(v.version)>0
-        assert len(v.source_file)>0
+        assert len(v.version) > 0
+        assert len(v.source_file) > 0
         d = v[:].filled()
         assert allclose(d, data, atol=1e-5, equal_nan=True)
 
@@ -220,10 +234,50 @@ def test_spatialtimevariable(allclose):
 
     with Dataset(fnc, "r") as nc:
         v = nc["bidule"]
-        assert len(v.version)>0
-        assert len(v.source_file)>0
+        assert len(v.version) > 0
+        assert len(v.source_file) > 0
         d = v[:].filled()
         assert allclose(d, data, atol=1e-5, equal_nan=True)
 
     fnc.unlink()
+
+
+@pytest.mark.parametrize("dtype", ["S", "U", "<S", "<U"])
+def test_textvariable(dtype, allclose):
+    fnc = FHERE / "test_textvariable.nc"
+    if fnc.exists():
+        fnc.unlink()
+
+    with Dataset(fnc, "w") as nc:
+        dims = OrderedDict()
+        dims["latitude"] = np.linspace(-40, -10, 10)
+        dims["longitude"] = np.linspace(110, 140, 10)
+        nchar = 20
+        nvar = nc4io.Variable(nc, "bidule",
+                              dimensions=dims,
+                              numpy_dtype=f"{dtype}{nchar}",
+                              units="mm.month-1")
+
+        nlats = len(dims["latitude"])
+        nlons = len(dims["longitude"])
+        def get_str():
+            l = [letters[np.random.randint(0, 26)]
+                 for i in range(nchar)]
+            return "".join(l)
+        data = [[get_str() for lo in range(nlons)] for la in range(nlats)]
+        data = np.array(data).astype(dtype)
+        nvar.write_data_to_dataset(data)
+
+        # Write data subset
+        idx = np.arange(3), np.arange(3)
+        st = "xxx"
+        nvar.write_data_to_dataset(st, idx)
+        data[idx[0][:, None], idx[1][None, :]] = st
+
+    with Dataset(fnc, "r") as nc:
+        d = nc["bidule"][:].astype(dtype)
+        assert np.all(d == data)
+
+    fnc.unlink()
+
 

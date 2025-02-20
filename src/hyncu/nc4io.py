@@ -12,17 +12,23 @@ import cf_units
 
 import netCDF4
 from netCDF4 import Dataset
+from netCDF4 import stringtochar
+
+TIME_DIMENSION_TYPE_LABEL = "time"
+SPATIAL_DIMENSION_TYPE_LABEL = "spatial"
+GENERIC_DIMENSION_TYPE_LABEL = "generic"
 
 TIME_ORIGIN = "1900"
 TIME_UNITS = f"minutes since {TIME_ORIGIN}-01-01 00:00:00"
-TIME_DTYPE = np.int64
+TIME_NUMPY_DTYPE = "i8"
 DEFAULT_MISSING_VALUE = -99999.0
 DEFAULT_SIGNIFICANT_DIGIT = 5
-DEFAULT_DTYPE = np.float32
+DEFAULT_NUMPY_DTYPE = "f4"
 
-DIM_LONGITUDE_NAME = "longitude"
-DIM_LATITUDE_NAME = "latitude"
-DIM_TIME_NAME = "time"
+DIMENSION_LONGITUDE_NAME = "longitude"
+DIMENSION_LATITUDE_NAME = "latitude"
+DIMENSION_TIME_NAME = "time"
+DIMENSION_NCHARS_NAME = "nchars"
 
 
 def num2date(nums: np.ndarray,
@@ -50,11 +56,12 @@ def date2num(times: pd.DatetimeIndex) -> np.ndarray:
 
 
 class Dimension():
-    def __init__(self, name: str, values: np.ndarray, dtype: str, units: str):
+    def __init__(self, name: str, values: np.ndarray,
+                 numpy_dtype: str, units: str):
         self.name = str(name)
-        self.values = np.array(values)
-        self.dtype = np.dtype(dtype)
-        self.dimension_type = "generic"
+        self.numpy_dtype = np.dtype(numpy_dtype)
+        self.values = np.array(values).astype(self.numpy_dtype)
+        self.dimension_type = GENERIC_DIMENSION_TYPE_LABEL
 
         # Check unit
         cf_units.Unit(units)
@@ -62,7 +69,7 @@ class Dimension():
 
     def __str__(self):
         txt = f"Dimension {self.name} [self.dimension_type]"\
-              + f", {self.dtype}, {len(self.values)} values"
+              + f", {self.numpy_dtype}, {len(self.values)} values"
         return txt
 
     def write_dimension_to_dataset(self, ncdset: Dataset) -> None:
@@ -71,7 +78,13 @@ class Dimension():
 
         nval = len(self.values)
         ncdset.createDimension(self.name, nval)
-        var = ncdset.createVariable(self.name, self.dtype,
+
+        # Do not create variable if the dimension is nchars
+        if self.name == DIMENSION_NCHARS_NAME:
+            return
+
+        var = ncdset.createVariable(self.name,
+                                    datatype=self.numpy_dtype,
                                     dimensions=[self.name])
         var[:] = self.values
         var.dimension_type = self.dimension_type
@@ -82,64 +95,63 @@ class Dimension():
     @classmethod
     def from_dataset(cls, ncdset: Dataset, name: str) -> Dimension:
         dvar = ncdset[name]
-        dtype = dvar.dtype
+        numpy_dtype = dvar.dtype
         units = dvar.units
         values = dvar[:]
-        return Dimension(name, values, dtype, units)
+        return Dimension(name, values, numpy_dtype, units)
 
 
 class TimeDimension(Dimension):
-    def __init__(self, name: str, values: np.ndarray):
-        times = netCDF4.date2num(pd.to_datetime(values).to_pydatetime(),
-                                 units=TIME_UNITS)
-        dtype = TIME_DTYPE
+    def __init__(self, name: str, times: np.ndarray):
+        numpy_dtype = TIME_NUMPY_DTYPE
         units = TIME_UNITS
-        super(TimeDimension, self).__init__(name, times, dtype, units)
-        self.dimension_type = "time"
+        values = date2num(pd.to_datetime(times))
+        super(TimeDimension, self).__init__(name, values, numpy_dtype, units)
+        self.dimension_type = TIME_DIMENSION_TYPE_LABEL
 
     @classmethod
     def from_dataset(cls, ncdset: Dataset) -> Dimension:
-        dim = Dimension.from_dataset(ncdset, DIM_TIME_NAME)
+        dim = Dimension.from_dataset(ncdset, DIMENSION_TIME_NAME)
         dim.values = num2date(dim.values, dim.units)
         return dim
 
 
 class SpatialDimension(Dimension):
     def __init__(self, values: np.ndarray, name: str):
-        assert name in [DIM_LONGITUDE_NAME, DIM_LATITUDE_NAME]
+        assert name in [DIMENSION_LONGITUDE_NAME, DIMENSION_LATITUDE_NAME]
         values = np.array(values).astype(np.float64)
-        dtype = np.float64
-        units = "degrees_east" if name == DIM_LONGITUDE_NAME\
+        numpy_dtype = np.float64
+        units = "degrees_east" if name == DIMENSION_LONGITUDE_NAME\
                 else "degrees_north"
-        super(SpatialDimension, self).__init__(name, values, dtype, units)
-        self.dimension_type = "spatial"
+        super(SpatialDimension, self).__init__(name, values, numpy_dtype, units)
+        self.dimension_type = SPATIAL_DIMENSION_TYPE_LABEL
 
     @classmethod
     def from_dataset(cls, ncdset: Dataset, name: str) -> Dimension:
-        assert name in [DIM_LONGITUDE_NAME, DIM_LATITUDE_NAME]
+        assert name in [DIMENSION_LONGITUDE_NAME, DIMENSION_LATITUDE_NAME]
         return Dimension.from_dataset(ncdset, name)
 
 
 def add_dimension(ncdset: Dataset, dname: str, values: np.ndarray) -> None:
-    # Test if the dimension is time
     try:
         np.datetime_data(values.dtype)
-        istime = True
-    except Exception:
-        istime = False
-
-    if istime:
         dim = TimeDimension(dname, values)
         dim.write_dimension_to_dataset(ncdset)
         return dim
+    except Exception:
+        pass
+
+    if dname == DIMENSION_NCHARS_NAME:
+        values = np.array(values).astype(np.int32)
+        dim = Dimension(dname, values, values.dtype, "-")
+        dim.write_dimension_to_dataset(ncdset)
+    elif dname in [DIMENSION_LONGITUDE_NAME, DIMENSION_LATITUDE_NAME]:
+        dim = SpatialDimension(values, dname)
+        dim.write_dimension_to_dataset(ncdset)
     else:
-        if dname in [DIM_LONGITUDE_NAME, DIM_LATITUDE_NAME]:
-            dim = SpatialDimension(values, dname)
-            dim.write_dimension_to_dataset(ncdset)
-        else:
-            values = np.array(values)
-            dim = Dimension(dname, values, values.dtype, "-")
-            dim.write_dimension_to_dataset(ncdset)
+        values = np.array(values)
+        dim = Dimension(dname, values, values.dtype, "-")
+        dim.write_dimension_to_dataset(ncdset)
 
     return dim
 
@@ -147,8 +159,8 @@ def add_dimension(ncdset: Dataset, dname: str, values: np.ndarray) -> None:
 def add_spatial_dimensions(ncdset: Dataset,
                            longitudes: np.ndarray,
                            latitudes: np.ndarray) -> None:
-    add_dimension(ncdset, DIM_LATITUDE_NAME, latitudes)
-    add_dimension(ncdset, DIM_LONGITUDE_NAME, longitudes)
+    add_dimension(ncdset, DIMENSION_LATITUDE_NAME, latitudes)
+    add_dimension(ncdset, DIMENSION_LONGITUDE_NAME, longitudes)
 
 
 def minimal_metadata(attrs: Optional[dict] = None):
@@ -179,7 +191,7 @@ class Variable():
                  name: str,
                  dimensions: Optional[Union[list, OrderedDict]] = None,
                  units: Optional[str] = "-",
-                 dtype: Optional[str] = DEFAULT_DTYPE,
+                 numpy_dtype: Optional[str] = DEFAULT_NUMPY_DTYPE,
                  compression: Optional[str] = "zlib",
                  chunksizes: Optional[tuple] = None,
                  fill_value: Optional[float] = DEFAULT_MISSING_VALUE,
@@ -192,49 +204,93 @@ class Variable():
             errmess = "Dataset does not have variables or dimensions"
             raise ValueError(errmess)
 
+        if ncdset.file_format not in ["NETCDF4", "NETCDF4_CLASSIC"]:
+            errmess = "Need NETCDF4 or NETCDF4_CLASSIC Dataset"\
+                      + f" file format, got {ncdset.file_format}."
+            raise ValueError(errmess)
+
         self.ncdset = ncdset
         self.name = str(name)
-        self.dtype = np.dtype(dtype)
+        if re.search("S|U", numpy_dtype):
+            numpy_nchar = int(re.sub("^.*(U|S)", "", numpy_dtype))
+            numpy_dtype = "S1"
+            # Remove compression for string data
+            compression = None
+        else:
+            numpy_nchar = 0
+
+        self.numpy_dtype = np.dtype(numpy_dtype)
+        self.numpy_nchar = numpy_nchar
 
         # Check units
         cf_units.Unit(units)
         self.units = units
 
-        self.dimensions = dimensions
+        # Build dimensions
+        self.dimensions = self.build_dimensions(dimensions)
 
-        if significant_digit is not None:
+        if significant_digit is not None and numpy_nchar == 0:
             self.significant_digit = int(significant_digit)
         else:
             self.significant_digit = None
 
         self.compression = compression
-        self.fill_value = self.dtype.type(fill_value)
+        try:
+            self.fill_value = self.numpy_dtype.type(fill_value)
+        except AttributeError:
+            self.fill_value = "-"
         self.chunksizes = chunksizes
         self.attrs = minimal_metadata(attrs)
 
         # Create dimensions and variables if needed
-        if isinstance(dimensions, OrderedDict):
-            self.write_dimensions_to_dataset()
+        self.write_dimensions_to_dataset()
 
         if self.name not in self.ncdset.variables:
             self.write_variable_to_dataset()
 
+    def build_dimensions(self, dimensions):
+        if isinstance(dimensions, OrderedDict):
+            dims = dimensions
+        else:
+            dims = OrderedDict()
+            for n in dimensions:
+                dims[n] = None
+
+        if self.numpy_nchar > 0:
+            nchars = np.arange(self.numpy_nchar)
+            dims[DIMENSION_NCHARS_NAME] = nchars
+
+        return dims
+
     def write_dimensions_to_dataset(self):
-        # Add dimensions in their original order
         for dname, dvalue in self.dimensions.items():
+            if dvalue is None:
+                continue
             add_dimension(self.ncdset, dname, dvalue)
 
     def write_variable_to_dataset(self):
+        # Case where self.dimensions is a dict
+        dims = [n for n in self.dimensions]
+
         sdigit = self.significant_digit
+
         var = self.ncdset.createVariable(varname=self.name,
-                                dimensions=self.dimensions,
-                                datatype=self.dtype,
+                                dimensions=dims,
+                                datatype=self.numpy_dtype,
                                 chunksizes=self.chunksizes,
                                 least_significant_digit=sdigit,
                                 compression=self.compression,
                                 fill_value=self.fill_value)
+
+        # Set char attributes if we are dealing with strings
+        # See https://unidata.github.io/netcdf4-python
+        if self.numpy_nchar > 0:
+            var._Encoding = "ascii"
+
         # Set basic attributes
-        var.units = self.units
+        if self.units is not None:
+            var.units = self.units
+
         var.long_name = self.name
         # Set other attributes
         for key, val in self.attrs.items():
@@ -242,10 +298,14 @@ class Variable():
 
     def write_data_to_dataset(self, data: np.ndarray,
                               subset_index: Optional[Union[list, tuple, np.ndarray]] = None):
+        ncvar = self.ncdset[self.name]
+        if self.numpy_nchar > 0:
+            data = np.array(data).astype(f"S{self.numpy_nchar}")
+
         if subset_index is None:
-            self.ncdset[self.name][:] = data
+            ncvar[:] = data
         else:
-            self.ncdset[self.name][subset_index] = data
+            ncvar[subset_index] = data
 
 
 class SpatialVariable(Variable):
@@ -253,28 +313,30 @@ class SpatialVariable(Variable):
                  longitudes: Optional[np.ndarray] = None,
                  latitudes: Optional[np.ndarray] = None,
                  units: Optional[str] = "-",
-                 dtype: Optional[str] = DEFAULT_DTYPE,
+                 numpy_dtype: Optional[str] = DEFAULT_NUMPY_DTYPE,
                  compression: Optional[str] = "zlib",
                  chunksizes: Optional[tuple] = None,
                  fill_value: Optional[float] = DEFAULT_MISSING_VALUE,
                  significant_digit: Optional[int] = DEFAULT_SIGNIFICANT_DIGIT,
                  attrs: Optional[dict] = None):
 
-        sdt = significant_digit
-        dims = None
+        sdigit = significant_digit
         if longitudes is not None and latitudes is not None:
             dims = OrderedDict()
-            dims[DIM_LATITUDE_NAME] = latitudes
-            dims[DIM_LONGITUDE_NAME] = longitudes
+            dims[DIMENSION_LATITUDE_NAME] = latitudes
+            dims[DIMENSION_LONGITUDE_NAME] = longitudes
+        else:
+            dims = [DIMENSION_LATITUDE_NAME,
+                    DIMENSION_LONGITUDE_NAME]
 
         super(SpatialVariable, self).__init__(ncdset, name,
                                               dimensions=dims,
                                               units=units,
-                                              dtype=dtype,
+                                              numpy_dtype=numpy_dtype,
                                               compression=compression,
                                               chunksizes=chunksizes,
                                               fill_value=fill_value,
-                                              significant_digit=sdt,
+                                              significant_digit=sdigit,
                                               attrs=attrs)
 
 
@@ -284,28 +346,31 @@ class SpatialTimeVariable(Variable):
                  latitudes: np.ndarray,
                  times: np.ndarray,
                  units: Optional[str] = "-",
-                 dtype: Optional[str] = DEFAULT_DTYPE,
+                 numpy_dtype: Optional[str] = DEFAULT_NUMPY_DTYPE,
                  compression: Optional[str] = "zlib",
                  chunksizes: Optional[tuple] = None,
                  fill_value: Optional[float] = DEFAULT_MISSING_VALUE,
                  significant_digit: Optional[int] = DEFAULT_SIGNIFICANT_DIGIT,
                  attrs: Optional[dict] = None):
 
-        sdt = significant_digit
-        dims = None
+        sdigit = significant_digit
         if longitudes is not None and latitudes is not None \
                 and times is not None:
             dims = OrderedDict()
-            dims[DIM_LATITUDE_NAME] = latitudes
-            dims[DIM_LONGITUDE_NAME] = longitudes
-            dims[DIM_TIME_NAME] = times
+            dims[DIMENSION_LATITUDE_NAME] = latitudes
+            dims[DIMENSION_LONGITUDE_NAME] = longitudes
+            dims[DIMENSION_TIME_NAME] = times
+        else:
+            dims = [DIMENSION_LATITUDE_NAME,
+                    DIMENSION_LONGITUDE_NAME,
+                    DIMENSION_TIME_NAME]
 
         super(SpatialTimeVariable, self).__init__(ncdset, name,
-                                              dimensions=dims,
-                                              units=units,
-                                              dtype=dtype,
-                                              compression=compression,
-                                              chunksizes=chunksizes,
-                                              fill_value=fill_value,
-                                              significant_digit=sdt,
-                                              attrs=attrs)
+                                                  dimensions=dims,
+                                                  units=units,
+                                                  numpy_dtype=numpy_dtype,
+                                                  compression=compression,
+                                                  chunksizes=chunksizes,
+                                                  fill_value=fill_value,
+                                                  significant_digit=sdigit,
+                                                  attrs=attrs)
