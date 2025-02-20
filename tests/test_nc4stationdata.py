@@ -26,7 +26,7 @@ def test_dataframe(index_type):
 
     with Dataset(fnc, "w") as nc:
         stationids = ["a", "b", "c", "d"]
-        variables = ["v1", "v2", "v3", "v4"]
+        variable_names = ["v1", "v2", "v3", "v4"]
 
         if index_type == "time":
             index = pd.date_range("1990-01-01", "2000-12-31", freq="D")
@@ -42,51 +42,60 @@ def test_dataframe(index_type):
         dataname = "truc"
         units = ["mm.day-1", "m3.s-1", "degC", "kg"]
         attrs = {"author": "me"}
-        nc4sd.add_variables(nc, stationids=stationids,
-                            variables=variables,
-                            units=units,
-                            index=index,
-                            dataset_name=dataname,
-                            attrs=attrs)
+        svar = nc4sd.StationVariable(nc, dataname,
+                                     stationids=stationids,
+                                     index=index,
+                                     column_names=variable_names,
+                                     column_units=units,
+                                     attrs=attrs)
 
-        assert "index" in nc.dimensions
-        assert "stationid" in nc.dimensions
-        assert f"{dataname}{SEP}variable_name" in nc.dimensions
-        assert f"{dataname}{SEP}variable_unit" in nc.variables
-        assert dataname in nc.variables
-        assert nc[dataname].author == "me"
+        assert nc4sd.STATION_DATA_INDEX_DIMENSION_NAME in nc.dimensions
+        assert nc4sd.STATIONID_DIMENSION_NAME in nc.dimensions
 
-        size = (len(index), len(variables))
-        cols = [f"{v}[{u}]" for v, u in zip(variables, units)]
+        dlabel = nc4sd.NUMERICAL_DATA_TYPE_LABEL
+        colvarname = nc4sd.column_variable_ncname(dataname, dlabel)
+        assert colvarname in nc.dimensions
+        assert colvarname in nc.variables
+
+        unitname = nc4sd.unit_variable_ncname(dataname, dlabel)
+        assert unitname in nc.variables
+        assert all([u1 == u2 for u1, u2 in zip(nc[unitname][:], units)])
+
+        varname = nc4sd.station_variable_ncname(dataname, dlabel)
+        assert varname in nc.variables
+
+        assert nc[varname].author == "me"
+
+        size = (len(index), len(variable_names))
+        cols = [f"{v}[{u}]" for v, u in zip(variable_names, units)]
         df = pd.DataFrame(np.random.uniform(-1, 1, size=size), \
                                 index=index, columns=cols)
 
-        with pytest.raises(ValueError, match="Dataset name"):
-            nc4sd.read_data_single_station(nc, dataname+SEP, "a", df)
-
-        nc4sd.write_data_single_station(nc, dataname, "a", df)
+        svar.write_data_for_single_station("a", df)
 
         # Set partial dataset
         df2 = df.iloc[:len(df)//2, :2]
-        nc4sd.write_data_single_station(nc, dataname, "b", df2)
+        svar.write_data_for_single_station("b", df2)
 
         # Set numpy array
         v = df.values.copy()
-        nc4sd.write_data_single_station(nc, dataname, "c", v)
+        svar.write_data_for_single_station("c", v)
 
         with pytest.raises(ValueError, match="Expected data of size"):
             v = df2.values.copy()
-            nc4sd.write_data_single_station(nc, dataname, "c", v)
+            svar.write_data_for_single_station("c", v)
 
 
     with Dataset(fnc, "r") as nc:
-        df, attrs = nc4sd.read_data_single_station(nc, dataname, "a")
-        assert df.shape == (len(index), len(variables))
+        svar2 = nc4sd.StationVariable(nc, dataname)
 
-        df3, attrs = nc4sd.read_data_single_station(nc, dataname, "b", clip=False)
-        assert df3.shape == (len(index), len(variables))
+        df, attrs = svar2.read_data_from_single_station("a")
+        assert df.shape == (len(index), len(variable_names))
 
-        coln = nc4sd.get_dataset_column_names(nc, dataname)
+        df3, attrs = svar2.read_data_from_single_station("b", clip=False)
+        assert df3.shape == (len(index), len(variable_names))
+
+        coln = svar2.get_column_names()
         for icn, cn in enumerate(coln):
             v = df3.loc[df2.index[-1]:, cn].iloc[1:]
             assert v.isnull().all()
@@ -94,11 +103,11 @@ def test_dataframe(index_type):
             if icn>=2:
                 assert df3.loc[:, cn].isnull().all()
 
-        df4, attrs = nc4sd.read_data_single_station(nc, dataname, "b")
+        df4, attrs = svar2.read_data_from_single_station("b")
         assert df4.shape == df2.shape
 
         with pytest.raises(ValueError, match="No station data"):
-            nc4sd.read_data_single_station(nc, dataname, "d")
+            svar2.read_data_from_single_station("d")
 
     fnc.unlink()
 
@@ -122,27 +131,29 @@ def test_stations(allclose):
                                     for i in np.random.randint(0, 26, 10)]) \
                                         for s in stations]
         with pytest.raises(ValueError, match="LONGITUDE was expected"):
-            nc4sd.write_station_info(nc, df)
+            ncsta = nc4sd.StationMetaData(nc, df)
 
         df.loc[:, "LONGITUDE"] = 1.
         df.loc[:, "LATITUDE"] = 2.
-        nc4sd.write_station_info(nc, df)
+        ncsta = nc4sd.StationMetaData(nc, df)
 
         # Add a second dataset
-        df_bis = df.copy().drop(["NAME", "LONGITUDE"], axis=1)
-        nc4sd.write_station_info(nc, df_bis, "stations_bis")
+        df_bis = df.iloc[:, 1:]
+        ncsta = nc4sd.StationMetaData(nc, df_bis, name="station_bis")
 
     with Dataset(fnc, "r") as nc:
-        df2, attrs = nc4sd.read_station_info(nc)
+        ncsta2 = nc4sd.StationMetaData(nc)
+        df2, attrs = ncsta2.read_metadata_from_dataset()
+
         assert df2.shape == df.shape
+        # Both have same columns
+        df2 = df2.loc[:, df.columns]
         assert allclose(df2.iloc[:, :4].values, df.iloc[:, :4].values, atol=1e-6)
 
-        # Test unit is not added to text columns
-        assert "NAME" in df2.columns
-
-        df3, attrs = nc4sd.read_station_info(nc, "stations_bis")
+        ncsta3 = nc4sd.StationMetaData(nc, name="station_bis")
+        df3, attrs = ncsta3.read_metadata_from_dataset()
         assert df3.shape[0] == df.shape[0]
-        assert df3.shape[1] == df.shape[1]-2
+        assert df3.shape[1] == df.shape[1]-1
 
     fnc.unlink()
 

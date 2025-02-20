@@ -2,6 +2,7 @@
 from __future__ import annotations
 from typing import Optional
 import re
+from collections import OrderedDict
 
 import numpy as np
 import pandas as pd
@@ -11,11 +12,17 @@ from netCDF4 import Dataset
 
 from hyncu import nc4io
 
-DEFAULT_STATION_DATASET_NAME = "stations"
+TEXT_DATA_TYPE_LABEL = "text"
+NUMERICAL_DATA_TYPE_LABEL = "numerical"
+TIME_DATA_TYPE_LABEL = "time"
+
+DEFAULT_STATION_DATASET_NAME = "station_metadata"
 EXPECTED_STATIONS_COLUMNS = ["NAME", "LONGITUDE", "LATITUDE"]
 
-TEXT_DATA_LABEL = "text"
-NUMERICAL_DATA_LABEL = "numerical"
+STATIONID_DIMENSION_NAME = "station_id"
+STATION_DATA_INDEX_DIMENSION_NAME = "station_data_index"
+
+STRING_MAX_LENGTH = 50
 
 LABEL_SEPARATOR = "."
 
@@ -27,6 +34,15 @@ def validate_units(units: list) -> None:
         except Exception:
             errmess = f"Unit {unit} is not valid."
             raise ValueError(errmess)
+
+
+def read_attributes(ncdset: Dataset, dataset_name: str) -> dict[str]:
+    attrs = {}
+    ndt = ncdset[dataset_name]
+    for key in ndt.ncattrs():
+        attrs[key] = getattr(ndt, key)
+
+    return attrs
 
 
 def get_item_index_from_dimension(ncdset: Dataset,
@@ -46,344 +62,337 @@ def get_item_index_from_dimension(ncdset: Dataset,
     return idx_nc, idx_data
 
 
-def check_datasetname(dataset_name):
-    if LABEL_SEPARATOR in dataset_name:
-        errmess = f"Dataset name '{dataset_name}' contains the"\
-                   + f" separation character '{LABEL_SEPARATOR}'."
-        raise ValueError(errmess)
+def column_variable_ncname(dataset_name, dtype):
+    return f"{dataset_name}{LABEL_SEPARATOR}column_name"\
+           + f"{LABEL_SEPARATOR}{dtype}"
 
 
-def data_variable_name(dataset_name):
-    return f"{dataset_name}{LABEL_SEPARATOR}variable_name"
+def station_variable_ncname(dataset_name, dtype):
+    return f"{dataset_name}{LABEL_SEPARATOR}{dtype}"
 
 
-def station_data_name(station_dataset_name, dlabel):
-    return f"{station_dataset_name}{LABEL_SEPARATOR}{dlabel}"
-
-
-def station_data_variable_name(station_dataset_name, dlabel):
-    sdn = station_data_name(station_dataset_name, dlabel)
-    return data_variable_name(sdn)
-
-
-def data_unit_name(dataset_name):
-    return f"{dataset_name}{LABEL_SEPARATOR}variable_unit"
-
-
-def station_data_unit_name(station_dataset_name, dlabel):
-    sdn = station_data_name(station_dataset_name, dlabel)
-    return data_unit_name(sdn)
+def unit_variable_ncname(dataset_name, dtype):
+    return f"{dataset_name}{LABEL_SEPARATOR}column_units"\
+           + f"{LABEL_SEPARATOR}{dtype}"
 
 
 def read_from_nc(ncdset: Dataset, variable_name):
     if variable_name not in ncdset.variables:
-        errmess = f"{variable_name} was not found in variables."\
-                    + " Make sure the function nc4dataframe.add_variables"\
-                    + " has been run."
+        errmess = f"{variable_name} was not found in variables."
         raise ValueError(errmess)
     return ncdset[variable_name][:]
 
 
-def get_dataset_column_names(ncdset: Dataset, dataset_name: str,
-                             add_units: Optional[bool] = True) -> list:
-    varnames = read_from_nc(ncdset, data_variable_name(dataset_name))
-    units = read_from_nc(ncdset, data_unit_name(dataset_name))
-    colnames = []
-    for v, u in zip(varnames, units):
-        cn = f"{v}[{u}]" if add_units else v
-        colnames.append(cn)
-    return colnames
-
-
-def add_variables(ncdset: Dataset,
-                  dataset_name: str,
-                  stationids: np.ndarray,
-                  variables: np.ndarray,
-                  index: np.ndarray,
-                  units: Optional[str] = None,
-                  attrs: Optional[dict] = None):
-
-    check_datasetname(dataset_name)
-
-    # Create dimensions
-    kw = {data_variable_name(dataset_name): variables}
-    nc4io.add_dimensions(ncdset, index=index, stationid=stationids, **kw)
-
-    # Create data variable
-    varnames = data_variable_name(dataset_name)
-    var = nc4io.Variable(dataset_name,
-                         ["stationid", "index", varnames],
-                         units="-",
-                         chunksizes=(1, min(10000, len(index)),
-                                     min(10, len(variables))),
-                         attrs=attrs)
-    var.to_dataset(ncdset)
-
-    # Units
-    units_var = nc4io.Variable(data_unit_name(dataset_name),
-                               [varnames],
-                               units="-",
-                               dtype=str, fill_value="NA",
-                               significant_digit=None,
-                               compression=None,
-                               attrs={"description":
-                                      "Units for each data variable"})
-    units_var.to_dataset(ncdset)
-    if units is None:
-        units = ["-"]*len(variables)
-
-    units = np.array(units)
-    validate_units(units)
-
-    if len(units) != len(variables):
-        errmess = f"Expected same number of variables ({len(variables)})"\
-                    f" and units ({len(units)})"
-        raise ValueError(errmess)
-    ncdset[data_unit_name(dataset_name)][:] = units
-
-
-def select_types(df: pd.DataFrame, dlabel: str) -> pd.DataFrame:
-    if dlabel == NUMERICAL_DATA_LABEL:
+def select_types(df: pd.DataFrame, data_type: str) -> pd.DataFrame:
+    if data_type == NUMERICAL_DATA_TYPE_LABEL:
         return df.select_dtypes(include="number").astype(np.float32)
-    elif dlabel == TEXT_DATA_LABEL:
-        return df.select_dtypes(include=["object", "datetime"]).astype(str)
+    elif data_type == TEXT_DATA_TYPE_LABEL:
+        dtype = f"U{STRING_MAX_LENGTH}"
+        return df.select_dtypes(include=["object", "datetime"]).astype(dtype)
     else:
-        errmess = f"dlabel {dlabel} not recognised."\
-                    f" Expected [{TEXT_DATA_LABEL}/{NUMERICAL_DATA_LABEL}]"
+        errmess = f"Data type '{data_type}' not recognised."\
+                  + f" Expected [{TEXT_DATA_TYPE_LABEL}"\
+                  + f"/{NUMERICAL_DATA_TYPE_LABEL}]"
         raise ValueError(errmess)
 
 
-def check_expected_stations_columns(columns: list):
-    variables = [re.sub("\\[.*", "", cn) for cn in columns]
-    for n in EXPECTED_STATIONS_COLUMNS:
-        if n not in variables:
-            errmess = f"{n} was expected in station variables"
-            raise ValueError(errmess)
+class StationMetaData():
+    def __init__(self, ncdset: Dataset,
+                 metadata: Optional[pd.DataFrame] = None,
+                 name: Optional[str] = DEFAULT_STATION_DATASET_NAME,
+                 metadata_column_units: Optional[list] = None,
+                 attrs: Optional[dict] = None):
+        self.name = name
+        self.ncdset = ncdset
+        self.metadata = metadata
+        self.attrs = nc4io.minimal_metadata(attrs)
 
+        if metadata is None:
+            # Data retrieval mode
+            return
 
-def configure_stations_variables(ncdset: Dataset,
-                                 station_dataset_name: str,
-                                 info: pd.DataFrame, dlabel: str) -> None:
-    variable_names = info.columns.str\
+        # Check columns in metadata
+        self.check_expected_metadata_columns()
+
+        # Create variables and write metadata to dataset
+        for data_type in [TEXT_DATA_TYPE_LABEL,
+                          NUMERICAL_DATA_TYPE_LABEL]:
+            self.write_metadata_data_to_dataset(data_type)
+            self.write_metadata_units_to_dataset(data_type)
+
+    def check_expected_metadata_columns(self):
+        metadata_column_names = [re.sub("\\[.*", "", cn)
+                                 for cn in self.metadata.columns]
+        for n in EXPECTED_STATIONS_COLUMNS:
+            if n not in metadata_column_names:
+                errmess = f"{n} was expected in meta data column names."
+                raise ValueError(errmess)
+
+    def write_metadata_data_to_dataset(self, data_type):
+        ncdset = self.ncdset
+        name = self.name
+        metadata_typed = select_types(self.metadata, data_type)
+
+        # Create data dimensions
+        dims = OrderedDict()
+        dtype = f"U{STRING_MAX_LENGTH}"
+        dims[STATIONID_DIMENSION_NAME] = \
+            metadata_typed.index.values.astype(dtype)
+
+        column_dimname = column_variable_ncname(name, data_type)
+        column_names = metadata_typed.columns.str\
                      .replace("\\[.*", "", regex=True).values.astype(str)
+        dims[column_dimname] = column_names
 
-    vdim_name = station_data_variable_name(station_dataset_name, dlabel)
-    vdim = nc4io.Dimension(vdim_name, variable_names,
-                           variable_names.dtype, "-")
-    vdim.to_dataset(ncdset)
+        # Create data variable
+        if data_type == TEXT_DATA_TYPE_LABEL:
+            compression = None
+            fill_value = "-"
+            numpy_dtype = f"U{STRING_MAX_LENGTH}"
+            sdigit = None
+        elif data_type == NUMERICAL_DATA_TYPE_LABEL:
+            compression = None
+            fill_value = np.nan
+            numpy_dtype = nc4io.DEFAULT_NUMPY_DTYPE
+            sdigit = 7
 
-    desc = "Variable storing the list of station meta data"\
-           + f" for dataset {station_dataset_name}."
-    ncdset[vdim_name].description = desc
+        metadata_varname = station_variable_ncname(name, data_type)
+        nvar = nc4io.Variable(ncdset, metadata_varname,
+                       dimensions=dims,
+                       units=None,
+                       numpy_dtype=numpy_dtype,
+                       compression=compression,
+                       fill_value=fill_value,
+                       significant_digit=sdigit,
+                       attrs=self.attrs)
+        nvar.write_data_to_dataset(metadata_typed)
+
+    def write_metadata_units_to_dataset(self, data_type):
+        ncdset = self.ncdset
+        name = self.name
+        metadata_typed = select_types(self.metadata, data_type)
+
+        # Extract units from columns
+        metadata_units = [re.sub(".*\\[|\\]$", "", cn)
+                              if re.search("\\[", cn) else ""
+                              for cn in metadata_typed.columns]
+        metadata_units = np.array(metadata_units)
+
+        # Create unit variable
+        unit_varname = unit_variable_ncname(name, data_type)
+        column_dimname = column_variable_ncname(name, data_type)
+        numpy_dtype = f"U{STRING_MAX_LENGTH}"
+        nvar = nc4io.Variable(ncdset, unit_varname,
+                       dimensions=[column_dimname],
+                       units=None,
+                       numpy_dtype=numpy_dtype,
+                       compression=None,
+                       fill_value=None,
+                       significant_digit=None)
+        nvar.write_data_to_dataset(metadata_units)
+
+    def read_metadata_from_dataset(self):
+        name = self.name
+        ncdset = self.ncdset
+        metadata = []
+        for data_type in [TEXT_DATA_TYPE_LABEL,
+                          NUMERICAL_DATA_TYPE_LABEL]:
+            metadata_varname = station_variable_ncname(name, data_type)
+            metadata_typed = ncdset[metadata_varname][:]
+
+            stationids = read_from_nc(ncdset, STATIONID_DIMENSION_NAME)
+
+            column_dimname = column_variable_ncname(name, data_type)
+            metadata_columns = read_from_nc(ncdset, column_dimname)
+
+            unit_varname = unit_variable_ncname(name, data_type)
+            metadata_units = read_from_nc(ncdset, unit_varname)
+            metadata_columns = [f"{n}[{u}]" if u != "" else n for n, u in
+                                zip(metadata_columns, metadata_units)]
+
+            # Generate dataframe
+            metadata_typed = pd.DataFrame(metadata_typed, index=stationids,
+                                          columns=metadata_columns)
+            metadata.append(metadata_typed)
+
+            attrs = read_attributes(ncdset, metadata_varname)
+
+        metadata = pd.concat(metadata, axis=1)
+        return metadata, attrs
 
 
-def configure_stations_units(ncdset: Dataset,
-                             station_dataset_name: str,
-                             info: pd.DataFrame, dlabel: str) -> None:
-    if dlabel == TEXT_DATA_LABEL:
-        units = np.array(["-"]*info.shape[1])
-    else:
-        cols = info.columns.str
-        units = cols.replace(".*\\[|\\]$", "", regex=True).values.astype(str)
-        variables = cols.replace("\\[.*", "", regex=True).values.astype(str)
-        units[units == variables] = "-"
+class StationVariable(nc4io.Variable):
+    def __init__(self, ncdset: Dataset,
+                 name: str,
+                 stationids: Optional[Union[list, pd.Index]] = None,
+                 index: Optional[pd.Index] = None,
+                 column_names: Optional[list] = None,
+                 column_units: Optional[list] = None,
+                 numpy_dtype: Optional[str] = nc4io.DEFAULT_NUMPY_DTYPE,
+                 compression: Optional[str] = "zlib",
+                 chunksizes: Optional[tuple] = None,
+                 fill_value: Optional[float] = nc4io.DEFAULT_MISSING_VALUE,
+                 significant_digit: Optional[int] = nc4io.DEFAULT_SIGNIFICANT_DIGIT,
+                 attrs: Optional[dict] = None):
 
-    validate_units(units)
+        # Storing only numerical data
+        self.data_type = NUMERICAL_DATA_TYPE_LABEL
 
-    uname = station_data_unit_name(station_dataset_name, dlabel)
-    vdim_name = station_data_variable_name(station_dataset_name, dlabel)
-    descr = "Variable storing station meta data units"\
-            + f" for dataset {station_dataset_name}."
-    un = nc4io.Variable(uname, [vdim_name], units="-",
-                        dtype=units.dtype, fill_value="NA",
-                        significant_digit=None,
-                        compression=None,
-                        attrs={"description": descr})
-    un.to_dataset(ncdset)
-    units = np.array(units)
-    ncdset[uname][:] = units
+        # Data dimensions : sites x index x variable
+        dtype = self.data_type
+        colvar_ncname = column_variable_ncname(name, dtype)
+        if stationids is None or index is None \
+                or column_names is None:
+            dims = [STATIONID_DIMENSION_NAME,
+                    STATION_DATA_INDEX_DIMENSION_NAME,
+                    colvar_ncname]
+        else:
+            dims = OrderedDict()
+            dims[STATIONID_DIMENSION_NAME] = stationids
+            dims[STATION_DATA_INDEX_DIMENSION_NAME] = index
+            dims[colvar_ncname] = column_names
 
+        # Initialise station variable
+        var_ncname = station_variable_ncname(name, dtype)
+        sdigit = significant_digit
+        super(StationVariable, self).__init__(ncdset, var_ncname,
+                                              dimensions=dims,
+                                              units="-",
+                                              numpy_dtype=numpy_dtype,
+                                              compression=compression,
+                                              chunksizes=chunksizes,
+                                              fill_value=fill_value,
+                                              significant_digit=sdigit,
+                                              attrs=attrs)
 
-def write_stations_data_by_type(ncdset: Dataset,
-                                station_dataset_name: str,
-                                info: pd.DataFrame,
-                                dlabel: str) -> None:
-    if dlabel == NUMERICAL_DATA_LABEL:
-        values = info.values
-        fill_value = np.nan
-        digit = 7
-    else:
-        values = info.values.astype(str)
-        fill_value = "NA"
-        digit = None
+        # Careful here, self.name is initialise to var_ncname
+        self.name = name
+        self.variable_ncname = var_ncname
 
-    dtype = values.dtype
-    attrs = dict(description=f"Stations / {dlabel} data")
-    dset = station_data_name(station_dataset_name, dlabel)
+        # Dealing with units
+        if column_units is not None:
+            unit_var_ncname = unit_variable_ncname(name, dtype)
+            if unit_var_ncname not in ncdset.variables:
+                self.write_column_units_to_dataset(column_units)
 
-    vdim_name = station_data_variable_name(station_dataset_name,
-                                           dlabel)
-    var = nc4io.Variable(dset,
-                         ["stationid", vdim_name],
-                         units="-", dtype=dtype,
-                         fill_value=fill_value,
-                         significant_digit=digit,
-                         chunksizes=values.shape,
-                         compression=None,
-                         attrs=attrs)
-    var.to_dataset(ncdset)
-    ncdset[dset][:] = values
+    def get_column_names(self, add_units: Optional[bool] = True):
+        ncdset = self.ncdset
+        name = self.name
+        dtype = self.data_type
 
+        colvar_ncname = column_variable_ncname(name, dtype)
+        colnames = read_from_nc(ncdset, colvar_ncname)
+        if add_units:
+            unit_var_ncname = unit_variable_ncname(name, dtype)
+            try:
+                units = read_from_nc(ncdset, unit_var_ncname)
+                colnames = [f"{v}[{u}]" for v, u in zip(colnames, units)]
+            except ValueError:
+                pass
 
-def add_stationid_dimension(ncdset: Dataset, stations: pd.DataFrame) -> None:
-    stationids = np.array(stations.index.values).astype(str)
-    if "stationid" not in ncdset.dimensions:
-        dim = nc4io.Dimension("stationid", stationids, stationids.dtype, "-")
-        dim.to_dataset(ncdset)
-    else:
-        if not np.all(stationids == ncdset["stationid"][:]):
-            errmess = "Station IDs should be identical to the one "\
-                      "stored in the 'stationid' dimension"
+        return colnames
+
+    def write_column_units_to_dataset(self, column_units):
+        name = self.name
+        ncdset = self.ncdset
+        dtype = self.data_type
+
+        # Check number of units
+        dtype = NUMERICAL_DATA_TYPE_LABEL
+        colvar_ncname = column_variable_ncname(name, dtype)
+        ncolumns = ncdset[colvar_ncname].shape[0]
+        if len(column_units) != ncolumns:
+            errmess = f"Expected {ncolumns} units, "\
+                      + f"got {len(column_units)}."
             raise ValueError(errmess)
 
+        # Set variable
+        unit_var_ncname = unit_variable_ncname(name, dtype)
+        numpy_dtype = f"U{STRING_MAX_LENGTH}"
+        column_units = np.array(column_units).astype(numpy_dtype)
+        unit_var = nc4io.Variable(ncdset, unit_var_ncname,
+                                  dimensions=[colvar_ncname],
+                                  compression=None,
+                                  numpy_dtype=numpy_dtype)
+        unit_var.write_data_to_dataset(column_units)
 
-def write_station_info(ncdset: Dataset,
-                       info: pd.DataFrame,
-                       station_dataset_name:
-                       Optional[str] = DEFAULT_STATION_DATASET_NAME,
-                       attrs: Optional[dict] = None) -> None:
-    if station_dataset_name == DEFAULT_STATION_DATASET_NAME:
-        check_expected_stations_columns(info.columns)
+    def write_data_for_single_station(self, stationid: str,
+                                  data: pd.DataFrame) -> None:
+        name = self.name
+        dtype = self.data_type
+        ncdset = self.ncdset
+        istation, _ = get_item_index_from_dimension(ncdset,
+                                                    STATIONID_DIMENSION_NAME,
+                                                    [stationid])
+        istation = istation[0]
+        variable_ncname = self.variable_ncname
+        obj = ncdset[variable_ncname]
+        nsites, nindex, nvars = obj.shape
 
-    check_datasetname(station_dataset_name)
+        if isinstance(data, pd.DataFrame):
+            try:
+                index = nc4io.date2num(data.index)
+            except Exception:
+                index = data.index.values
 
-    add_stationid_dimension(ncdset, info)
+            dname = STATION_DATA_INDEX_DIMENSION_NAME
+            iindex_nc, iindex_data = \
+                get_item_index_from_dimension(ncdset, dname, index)
 
-    attrs = nc4io.minimal_metadata(attrs)
+            column_names = [re.sub("\\[.*", "", cn) for cn in data.columns.values]
+            dname = column_variable_ncname(name, dtype)
+            ivars_nc, ivars_data = \
+                get_item_index_from_dimension(ncdset, dname, column_names)
+        else:
+            if data.shape != (nindex, nvars):
+                errmess = f"Expected data of size ({nindex}, {nvars}), "\
+                          + f"got {data.shape}."
+                raise ValueError(errmess)
 
-    for dlabel in [TEXT_DATA_LABEL, NUMERICAL_DATA_LABEL]:
-        info_type = select_types(info, dlabel)
+            iindex_nc = np.arange(nindex)
+            iindex_data = iindex_nc
+            ivars_nc = np.arange(nvars)
+            ivars_data = ivars_nc
 
-        configure_stations_variables(ncdset, station_dataset_name,
-                                     info_type, dlabel)
+        # Write data to netcdf only for selected part of the dataset
+        tostore = np.array(data)[iindex_data[:, None], ivars_data[None, :]]
+        obj[istation, iindex_nc, ivars_nc] = tostore
 
-        configure_stations_units(ncdset, station_dataset_name,
-                                 info_type, dlabel)
+    def read_data_from_single_station(self, stationid: str,
+                                      clip: Optional[bool] = True):
+        # Get attributes
+        ncdset = self.ncdset
+        variable_ncname = self.variable_ncname
+        attrs = read_attributes(ncdset, variable_ncname)
 
-        write_stations_data_by_type(ncdset, station_dataset_name,
-                                    info_type, dlabel)
-        # Set metadata
-        attrs["data_type"] = dlabel
-        dset = station_data_name(station_dataset_name, dlabel)
-        for key, value in attrs.items():
-            setattr(ncdset[dset], key, value)
-
-
-def read_attributes(ncdset: Dataset, dataset_name: str) -> dict[str]:
-    attrs = {}
-    ndt = ncdset[dataset_name]
-    for key in ndt.ncattrs():
-        attrs[key] = getattr(ndt, key)
-
-    return attrs
-
-
-def read_station_info(ncdset: Dataset,
-                      station_dataset_name:
-                      Optional[str] =
-                      DEFAULT_STATION_DATASET_NAME) -> pd.DataFrame:
-    # Get attributes
-    dset = station_data_name(station_dataset_name, NUMERICAL_DATA_LABEL)
-    attrs = read_attributes(ncdset, dset)
-    for key in ["long_name", "standard_name", "data_type",
-                "units", "_FillValue", "least_significant_digit"]:
-        attrs.pop(key)
-
-    # Get data
-    info = []
-    stationids = ncdset["stationid"][:]
-    for dlabel in [NUMERICAL_DATA_LABEL, TEXT_DATA_LABEL]:
-        dset = station_data_name(station_dataset_name, dlabel)
-        array = read_from_nc(ncdset, dset)
-        colnames = get_dataset_column_names(ncdset, dset,
-                                            dlabel == NUMERICAL_DATA_LABEL)
-        info.append(pd.DataFrame(array, index=stationids, columns=colnames))
-
-    return pd.concat(info, axis=1), attrs
-
-
-def write_data_single_station(ncdset: Dataset,
-                              dataset_name: str,
-                              stationid: str,
-                              data: pd.DataFrame) -> None:
-
-    check_datasetname(dataset_name)
-    istation, _ = get_item_index_from_dimension(ncdset, "stationid",
-                                                [stationid])
-    istation = istation[0]
-
-    nsites, nindex, nvars = ncdset[dataset_name].shape
-
-    if hasattr(data, "index"):
-        # Data is assumed to be a dataframe
-        try:
-            index = nc4io.date2num(data.index)
-        except Exception:
-            index = data.index.values
-        iindex_nc, iindex_data = get_item_index_from_dimension(ncdset,
-                                                               "index",
-                                                               index)
-        variables = [re.sub("\\[.*", "", cn) for cn in data.columns.values]
-        vname = data_variable_name(dataset_name)
-        ivars_nc, ivars_data = get_item_index_from_dimension(ncdset,
-                                                             vname,
-                                                             variables)
-    else:
-        if data.shape != (nindex, nvars):
-            errmess = f"Expected data of size ({nindex}, {nvars}), "\
-                      + f"got {data.shape}."
+        # Find station index
+        dname = STATIONID_DIMENSION_NAME
+        istation, _ = get_item_index_from_dimension(ncdset,
+                                                    dname, [stationid])
+        if len(istation) == 0:
+            errmess = f"Cannot find stationid {stationid}."
             raise ValueError(errmess)
 
-        iindex_nc = np.arange(nindex)
-        iindex_data = iindex_nc
-        ivars_nc = np.arange(nvars)
-        ivars_data = ivars_nc
+        istation = istation[0]
 
-    # Write data to netcdf only for the common portion
-    tostore = np.array(data)[iindex_data[:, None], ivars_data[None, :]]
-    ncdset[dataset_name][istation, iindex_nc, ivars_nc] = tostore
+        # Build dataframe
+        colnames = self.get_column_names()
 
+        dname = STATION_DATA_INDEX_DIMENSION_NAME
+        index = read_from_nc(ncdset, dname)
+        if ncdset[dname].dimension_type == nc4io.DIMENSION_TIME_NAME:
+            index = nc4io.num2date(index)
 
-def read_data_single_station(ncdset: Dataset,
-                             dataset_name: str,
-                             stationid: str,
-                             clip: Optional[bool] = True):
-    check_datasetname(dataset_name)
+        data = ncdset[variable_ncname][istation, :, :]
 
-    # Get attributes
-    attrs = read_attributes(ncdset, dataset_name)
+        df = pd.DataFrame(data, index=index,
+                          columns=colnames)
+        if clip:
+            index_ok = df.notnull().any(axis=1)
+            var_ok = df.notnull().any(axis=0)
+            df = df.loc[index_ok, var_ok]
 
-    # Find station index
-    istation, _ = get_item_index_from_dimension(ncdset,
-                                                "stationid",
-                                                [stationid])
-    # Build dataframe
-    istation = istation[0]
-    colnames = get_dataset_column_names(ncdset, dataset_name)
-    index = read_from_nc(ncdset, "index")
-    istime = ncdset["index"].dimension_type == "time"
-    if istime:
-        index = nc4io.num2date(index)
+            if 0 in df.shape:
+                raise ValueError("No station data.")
 
-    df = pd.DataFrame(ncdset[dataset_name][istation, :, :],
-                      index=index,
-                      columns=colnames)
-    if clip:
-        index_ok = df.notnull().any(axis=1)
-        var_ok = df.notnull().any(axis=0)
-        df = df.loc[index_ok, var_ok]
-
-        if 0 in df.shape:
-            raise ValueError("No station data.")
-
-    return df, attrs
+        return df, attrs
