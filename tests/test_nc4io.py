@@ -20,11 +20,19 @@ import warnings
 FHERE = Path(__file__).resolve().parent
 
 
-def generate_random_strings(nval, unicode=False, minlength=5, maxlength=40):
+def generate_random_strings(nval, unicode=0,
+                            minlength=5, maxlength=40):
     strings = []
     for i in range(nval):
         length = random.randint(minlength, maxlength)
-        if unicode:
+        if unicode == 0:
+            use_unicode = False
+        elif unicode == 1:
+            use_unicode = True
+        else:
+            use_unicode = random.choice([True, False])
+
+        if use_unicode:
             s = "".join(chr(random.randint(0, 0x10FFFF)) for _ in range(length))
         else:
             punctuation = re.sub("\\[|\\]", "", string.punctuation)
@@ -43,6 +51,16 @@ def test_num2date(allclose):
 
     n2 = nc4io.date2num(t2)
     assert allclose(n, n2)
+
+
+def test_remove_non_ascii_element():
+    s = "ひらがな" + generate_random_strings(1)[0]
+    sna = nc4io.remove_non_ascii_element(s)
+    assert sna == s[4:]
+
+    s = generate_random_strings(1)[0]
+    sna = nc4io.remove_non_ascii_element(s)
+    assert s == sna
 
 
 @pytest.mark.parametrize("dimension_type",
@@ -81,17 +99,17 @@ def test_dimension(dimension_type, allclose):
             assert "latitude" in nc.dimensions
 
         elif dimension_type == "txt-ascii":
-            values = generate_random_strings(10, False)
+            values = generate_random_strings(10, 0)
             dim = nc4io.Dimension("bidule-ascii", values, values.dtype, "m/s")
             dim.write_dimension_to_dataset(nc)
             assert "bidule-ascii" in nc.dimensions
 
         elif dimension_type == "txt-unicode":
-            values = generate_random_strings(10, True)
+            values = generate_random_strings(10, 2)
             msg = "Values in dimension"
             with pytest.raises(ValueError, match=msg):
-                dim = nc4io.Dimension("bidule-unicode", values, values.dtype, "m/s")
-
+                dim = nc4io.Dimension("bidule-unicode", values,
+                                      values.dtype, "m/s")
 
     with Dataset(fnc, "r") as nc:
         if dimension_type == "generic":
@@ -310,12 +328,8 @@ def test_textvariable(dtype,  allclose):
 
         nlats = len(dims["latitude"])
         nlons = len(dims["longitude"])
-        def get_str():
-            l = [letters[np.random.randint(0, 26)]
-                 for i in range(nchar)]
-            return "".join(l)
-
-        data = [generate_random_strings(nlons, is_unicode,
+        unicode = 2 if is_unicode else 0
+        data = [generate_random_strings(nlons, unicode,
                                         maxlength=nchar)
                 for la in range(nlats)]
         data = np.array(data)

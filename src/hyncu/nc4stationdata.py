@@ -19,6 +19,7 @@ from hyncu.nc4io import date2num
 from hyncu.nc4io import num2date
 from hyncu.nc4io import minimal_metadata
 from hyncu.nc4io import Variable
+from hyncu.nc4io import remove_non_ascii_vectorized
 
 TEXT_DATA_TYPE_LABEL = "text"
 NUMERICAL_DATA_TYPE_LABEL = "numerical"
@@ -102,10 +103,16 @@ def select_types(df: pd.DataFrame, data_type: str) -> pd.DataFrame:
         raise ValueError(errmess)
 
 
-def get_dataframe_index(df):
+def dataframe_items_to_dimensions(df):
     dtype = f"U{STRING_MAX_LENGTH}"
-    index = pd.Series(df.index).astype(dtype)
-    return index
+    index = pd.Series(df.index).values.astype(dtype)
+    index = remove_non_ascii_vectorized(index)
+
+    columns = df.columns.str\
+                     .replace("\\[.*", "", regex=True)
+    columns = columns.values.astype(dtype)
+    columns = remove_non_ascii_vectorized(columns)
+    return index, columns
 
 
 class StationMetaData():
@@ -148,13 +155,11 @@ class StationMetaData():
         # Create data dimensions
         dims = OrderedDict()
 
-        index = get_dataframe_index(metadata_typed)
+        index, columns = dataframe_items_to_dimensions(metadata_typed)
         dims[STATIONID_DIMENSION_NAME] = index
 
         column_dimname = column_variable_ncname(name, data_type)
-        column_names = metadata_typed.columns.str\
-                     .replace("\\[.*", "", regex=True).values.astype(str)
-        dims[column_dimname] = column_names
+        dims[column_dimname] = columns
 
         # Create data variable
         if data_type == TEXT_DATA_TYPE_LABEL:

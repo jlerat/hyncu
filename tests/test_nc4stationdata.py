@@ -132,11 +132,13 @@ def test_dataframe(index_type):
     fnc.unlink()
 
 
-@pytest.mark.parametrize("unicode", [False, True])
-def test_stations(unicode, allclose):
+@pytest.mark.parametrize("has_unicode", [True, False])
+def test_stations(has_unicode, allclose):
     fnc = FHERE / "test_dataframe_stations.nc"
     if fnc.exists():
         fnc.unlink()
+
+    unicode = 2 if has_unicode else 0
 
     with Dataset(fnc, "w") as nc:
         stations = generate_random_strings(10, unicode)
@@ -165,16 +167,17 @@ def test_stations(unicode, allclose):
     with Dataset(fnc, "r") as nc:
         ncsta2 = nc4sd.StationMetaData(nc)
         df2, attrs = ncsta2.read_metadata_from_dataset()
-
         assert df2.shape == df.shape
-        # Both have same columns
-        df2 = df2.loc[:, df.columns]
-        assert allclose(df2.iloc[:, :4].values, df.iloc[:, :4].values, atol=1e-6)
 
-        ncsta3 = nc4sd.StationMetaData(nc, name="station_bis")
-        df3, attrs = ncsta3.read_metadata_from_dataset()
-        assert df3.shape[0] == df.shape[0]
-        assert df3.shape[1] == df.shape[1]-1
+        if not has_unicode:
+            # Both have same columns
+            df2 = df2.loc[:, df.columns]
+            assert allclose(df2.iloc[:, :4].values, df.iloc[:, :4].values, atol=1e-6)
+
+            ncsta3 = nc4sd.StationMetaData(nc, name="station_bis")
+            df3, attrs = ncsta3.read_metadata_from_dataset()
+            assert df3.shape[0] == df.shape[0]
+            assert df3.shape[1] == df.shape[1]-1
 
     fnc.unlink()
 

@@ -77,7 +77,7 @@ class Dimension():
 
         values = np.array(values).astype(self.numpy_dtype)
         if re.search("S|U", str(numpy_dtype)):
-            all_ascii = np.any(is_ascii_vectorised(values))
+            all_ascii = np.all(is_ascii_vectorised(values))
             if not all_ascii:
                 errmess = "Values in dimension cannot be "\
                           + "non-ascii characters."
@@ -111,7 +111,7 @@ class Dimension():
                                     dimensions=[self.name])
         try:
             var[:] = self.values
-        except UnicodeEncoreError:
+        except UnicodeEncodeError:
             errmess = "Only ascii character accepted in dimension"
             raise ValueError(errmess)
 
