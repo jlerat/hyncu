@@ -309,7 +309,8 @@ class StationVariable(Variable):
             unit_var_ncname = unit_variable_ncname(name, dtype)
             try:
                 units = read_from_nc(ncdset, unit_var_ncname)
-                colnames = [f"{v}[{u}]" for v, u in zip(colnames, units)]
+                colnames = [v if u in ["", "-"] else f"{v}[{u}]"
+                            for v, u in zip(colnames, units)]
             except ValueError:
                 pass
 
