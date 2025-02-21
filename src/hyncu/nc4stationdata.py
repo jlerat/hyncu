@@ -238,6 +238,12 @@ class StationVariable(nc4io.Variable):
         # Storing only numerical data
         self.data_type = NUMERICAL_DATA_TYPE_LABEL
 
+        # Set default chunksizes
+        if chunksizes is None and stationids is not None\
+                and index is not None and column_names is not None:
+            chunksizes = (1, min(5000, len(index)),
+                          len(column_names))
+
         # Data dimensions : sites x index x variable
         dtype = self.data_type
         colvar_ncname = column_variable_ncname(name, dtype)
