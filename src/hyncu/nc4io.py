@@ -30,6 +30,8 @@ DIMENSION_LATITUDE_NAME = "latitude"
 DIMENSION_TIME_NAME = "time"
 DIMENSION_NCHARS_NAME = "nchars"
 
+STRING_MAX_LENGTH = 50
+
 
 def num2date(nums: np.ndarray,
              units: Optional[str] = TIME_UNITS) -> pd.DatetimeIndex:
@@ -55,12 +57,33 @@ def date2num(times: pd.DatetimeIndex) -> np.ndarray:
     return nums
 
 
+def remove_non_ascii_element(s):
+    return "".join(filter(lambda x: ord(x) < 128, s))
+
+remove_non_ascii_vectorized = np.vectorize(remove_non_ascii_element)
+
+def is_ascii_element(s):
+    return all(ord(c) < 128 for c in s)
+
+is_ascii_vectorised = np.vectorize(is_ascii_element)
+
+
 class Dimension():
     def __init__(self, name: str, values: np.ndarray,
-                 numpy_dtype: str, units: str):
+                 numpy_dtype: Union[str, numpy.dtype],
+                 units: str):
         self.name = str(name)
         self.numpy_dtype = np.dtype(numpy_dtype)
-        self.values = np.array(values).astype(self.numpy_dtype)
+
+        values = np.array(values).astype(self.numpy_dtype)
+        if re.search("S|U", str(numpy_dtype)):
+            all_ascii = np.any(is_ascii_vectorised(values))
+            if not all_ascii:
+                errmess = "Values in dimension cannot be "\
+                          + "non-ascii characters."
+                raise ValueError(errmess)
+
+        self.values = values
         self.dimension_type = GENERIC_DIMENSION_TYPE_LABEL
 
         # Check unit
@@ -86,7 +109,12 @@ class Dimension():
         var = ncdset.createVariable(self.name,
                                     datatype=self.numpy_dtype,
                                     dimensions=[self.name])
-        var[:] = self.values
+        try:
+            var[:] = self.values
+        except UnicodeEncoreError:
+            errmess = "Only ascii character accepted in dimension"
+            raise ValueError(errmess)
+
         var.dimension_type = self.dimension_type
         var.units = self.units
         var.long_name = self.name
@@ -118,7 +146,11 @@ class TimeDimension(Dimension):
 
 class SpatialDimension(Dimension):
     def __init__(self, values: np.ndarray, name: str):
-        assert name in [DIMENSION_LONGITUDE_NAME, DIMENSION_LATITUDE_NAME]
+        if name not in [DIMENSION_LONGITUDE_NAME,
+                        DIMENSION_LATITUDE_NAME]:
+            errmess = "Wrong dimension name."
+            raise ValueError(errmess)
+
         values = np.array(values).astype(np.float64)
         numpy_dtype = np.float64
         units = "degrees_east" if name == DIMENSION_LONGITUDE_NAME\
@@ -299,8 +331,14 @@ class Variable():
     def write_data_to_dataset(self, data: np.ndarray,
                               subset_index: Optional[Union[list, tuple, np.ndarray]] = None):
         ncvar = self.ncdset[self.name]
+        data = np.array(data)
         if self.numpy_nchar > 0:
-            data = np.array(data).astype(f"S{self.numpy_nchar}")
+            try:
+                data = data.astype(f"S{self.numpy_nchar}")
+            except UnicodeEncodeError:
+                # Convert all non-ascii to ascii
+                data = remove_non_ascii_vectorized(data)
+                data = data.astype(f"S{self.numpy_nchar}")
 
         if subset_index is None:
             ncvar[:] = data

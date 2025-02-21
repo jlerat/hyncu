@@ -2,7 +2,10 @@ import math
 from pathlib import Path
 import pandas as pd
 from collections import OrderedDict
-from string import ascii_letters as letters
+
+import re
+import random
+import string
 
 import pytest
 
@@ -16,6 +19,22 @@ import warnings
 
 FHERE = Path(__file__).resolve().parent
 
+
+def generate_random_strings(nval, unicode=False, minlength=5, maxlength=40):
+    strings = []
+    for i in range(nval):
+        length = random.randint(minlength, maxlength)
+        if unicode:
+            s = "".join(chr(random.randint(0, 0x10FFFF)) for _ in range(length))
+        else:
+            punctuation = re.sub("\\[|\\]", "", string.punctuation)
+            ascii_chars = string.ascii_letters + string.digits + punctuation
+            s = ''.join(random.choice(ascii_chars) for _ in range(length))
+        strings.append(s)
+
+    return np.array(strings)
+
+
 def test_num2date(allclose):
     t = pd.date_range("1850-01-01", "2100-12-31", freq="MS")
     n = nc4io.date2num(t)
@@ -26,47 +45,75 @@ def test_num2date(allclose):
     assert allclose(n, n2)
 
 
-def test_dimension(allclose):
+@pytest.mark.parametrize("dimension_type",
+                         ["generic", "time", "longitude", "latitude",
+                          "txt-ascii", "txt-unicode"])
+def test_dimension(dimension_type, allclose):
     fnc = FHERE / "test_dimension.nc"
     if fnc.exists():
         fnc.unlink()
 
     with Dataset(fnc, "w") as nc:
-        values = np.arange(10)
-        dim = nc4io.Dimension("bidule", values, np.float64, "m/s")
-        dim.write_dimension_to_dataset(nc)
-        assert "bidule" in nc.dimensions
-        d = nc.dimensions["bidule"]
-        assert allclose(values.shape, d.size)
+        if dimension_type == "generic":
+            values = np.arange(10)
+            dim = nc4io.Dimension("bidule", values, np.float64, "m/s")
+            dim.write_dimension_to_dataset(nc)
+            assert "bidule" in nc.dimensions
+            d = nc.dimensions["bidule"]
+            assert allclose(values.shape, d.size)
 
-        times = pd.date_range("2001-01-01", "2010-12-01", freq="MS")
-        tdim = nc4io.TimeDimension("time", times)
-        tdim.write_dimension_to_dataset(nc)
-        assert "time" in nc.dimensions
+        elif dimension_type == "time":
+            times = pd.date_range("2001-01-01", "2010-12-01", freq="MS")
+            tdim = nc4io.TimeDimension("time", times)
+            tdim.write_dimension_to_dataset(nc)
+            assert "time" in nc.dimensions
 
-        lons = np.linspace(110, 140, 10)
-        ldim = nc4io.SpatialDimension(lons, "longitude")
-        ldim.write_dimension_to_dataset(nc)
-        assert "longitude" in nc.dimensions
+        elif dimension_type == "longitude":
+            lons = np.linspace(110, 140, 10)
+            ldim = nc4io.SpatialDimension(lons, "longitude")
+            ldim.write_dimension_to_dataset(nc)
+            assert "longitude" in nc.dimensions
 
-        lats = np.linspace(-40, -10, 10)
-        ldim = nc4io.SpatialDimension(lats, "latitude")
-        ldim.write_dimension_to_dataset(nc)
-        assert "latitude" in nc.dimensions
+        elif dimension_type == "latitude":
+            lats = np.linspace(-40, -10, 10)
+            ldim = nc4io.SpatialDimension(lats, "latitude")
+            ldim.write_dimension_to_dataset(nc)
+            assert "latitude" in nc.dimensions
+
+        elif dimension_type == "txt-ascii":
+            values = generate_random_strings(10, False)
+            dim = nc4io.Dimension("bidule-ascii", values, values.dtype, "m/s")
+            dim.write_dimension_to_dataset(nc)
+            assert "bidule-ascii" in nc.dimensions
+
+        elif dimension_type == "txt-unicode":
+            values = generate_random_strings(10, True)
+            msg = "Values in dimension"
+            with pytest.raises(ValueError, match=msg):
+                dim = nc4io.Dimension("bidule-unicode", values, values.dtype, "m/s")
+
 
     with Dataset(fnc, "r") as nc:
-        dim = nc4io.Dimension.from_dataset(nc, "bidule")
-        assert allclose(dim.values, values)
+        if dimension_type == "generic":
+            dim = nc4io.Dimension.from_dataset(nc, "bidule")
+            assert allclose(dim.values, values)
 
-        tdim = nc4io.TimeDimension.from_dataset(nc)
-        diff = (tdim.values-times).seconds
-        assert np.all(diff==0)
+        elif dimension_type == "time":
+            tdim = nc4io.TimeDimension.from_dataset(nc)
+            diff = (tdim.values-times).seconds
+            assert np.all(diff==0)
 
-        ldim = nc4io.SpatialDimension.from_dataset(nc, "longitude")
-        assert allclose(ldim.values, lons)
+        elif dimension_type == "longitude":
+            ldim = nc4io.SpatialDimension.from_dataset(nc, "longitude")
+            assert allclose(ldim.values, lons)
 
-        ldim = nc4io.SpatialDimension.from_dataset(nc, "latitude")
-        assert allclose(ldim.values, lats)
+        elif dimension_type == "latitude":
+            ldim = nc4io.SpatialDimension.from_dataset(nc, "latitude")
+            assert allclose(ldim.values, lats)
+
+        elif dimension_type == "txt-ascii":
+            dim = nc4io.Dimension.from_dataset(nc, "bidule-ascii")
+            assert all([v1 == v2 for v1, v2 in zip(dim.values, values)])
 
     fnc.unlink()
 
@@ -242,20 +289,23 @@ def test_spatialtimevariable(allclose):
     fnc.unlink()
 
 
-@pytest.mark.parametrize("dtype", ["S", "U", "<S", "<U"])
-def test_textvariable(dtype, allclose):
+@pytest.mark.parametrize("dtype", ["S", "U", "<S", "<U", "unicode"])
+def test_textvariable(dtype,  allclose):
     fnc = FHERE / "test_textvariable.nc"
     if fnc.exists():
         fnc.unlink()
 
     with Dataset(fnc, "w") as nc:
         dims = OrderedDict()
-        dims["latitude"] = np.linspace(-40, -10, 10)
-        dims["longitude"] = np.linspace(110, 140, 10)
+        nlons, nlats = 100, 50
+        dims["latitude"] = np.linspace(-40, -10, nlats)
+        dims["longitude"] = np.linspace(110, 140, nlons)
         nchar = 20
+        is_unicode = dtype == "unicode"
+        np_dtype = f"U{nchar}" if is_unicode else f"{dtype}{nchar}"
         nvar = nc4io.Variable(nc, "bidule",
                               dimensions=dims,
-                              numpy_dtype=f"{dtype}{nchar}",
+                              numpy_dtype=np_dtype,
                               units="mm.month-1")
 
         nlats = len(dims["latitude"])
@@ -264,8 +314,14 @@ def test_textvariable(dtype, allclose):
             l = [letters[np.random.randint(0, 26)]
                  for i in range(nchar)]
             return "".join(l)
-        data = [[get_str() for lo in range(nlons)] for la in range(nlats)]
-        data = np.array(data).astype(dtype)
+
+        data = [generate_random_strings(nlons, is_unicode,
+                                        maxlength=nchar)
+                for la in range(nlats)]
+        data = np.array(data)
+        if dtype != "unicode":
+            data = data.astype(dtype)
+
         nvar.write_data_to_dataset(data)
 
         # Write data subset
@@ -275,8 +331,13 @@ def test_textvariable(dtype, allclose):
         data[idx[0][:, None], idx[1][None, :]] = st
 
     with Dataset(fnc, "r") as nc:
-        d = nc["bidule"][:].astype(dtype)
-        assert np.all(d == data)
+        d = nc["bidule"][:]
+        if dtype != "unicode":
+            d = d.astype(dtype)
+            assert np.all(d == data)
+        else:
+            is_ascii = nc4io.is_ascii_vectorised(d)
+            assert np.all(is_ascii)
 
     fnc.unlink()
 

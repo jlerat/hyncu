@@ -10,7 +10,15 @@ import pandas as pd
 import cf_units
 from netCDF4 import Dataset
 
-from hyncu import nc4io
+from hyncu.nc4io import STRING_MAX_LENGTH
+from hyncu.nc4io import DEFAULT_NUMPY_DTYPE
+from hyncu.nc4io import DEFAULT_MISSING_VALUE
+from hyncu.nc4io import DEFAULT_SIGNIFICANT_DIGIT
+from hyncu.nc4io import DIMENSION_TIME_NAME
+from hyncu.nc4io import date2num
+from hyncu.nc4io import num2date
+from hyncu.nc4io import minimal_metadata
+from hyncu.nc4io import Variable
 
 TEXT_DATA_TYPE_LABEL = "text"
 NUMERICAL_DATA_TYPE_LABEL = "numerical"
@@ -21,8 +29,6 @@ EXPECTED_STATIONS_COLUMNS = ["NAME", "LONGITUDE", "LATITUDE"]
 
 STATIONID_DIMENSION_NAME = "station_id"
 STATION_DATA_INDEX_DIMENSION_NAME = "station_data_index"
-
-STRING_MAX_LENGTH = 50
 
 LABEL_SEPARATOR = "."
 
@@ -96,6 +102,12 @@ def select_types(df: pd.DataFrame, data_type: str) -> pd.DataFrame:
         raise ValueError(errmess)
 
 
+def get_dataframe_index(df):
+    dtype = f"U{STRING_MAX_LENGTH}"
+    index = pd.Series(df.index).astype(dtype)
+    return index
+
+
 class StationMetaData():
     def __init__(self, ncdset: Dataset,
                  metadata: Optional[pd.DataFrame] = None,
@@ -105,7 +117,7 @@ class StationMetaData():
         self.name = name
         self.ncdset = ncdset
         self.metadata = metadata
-        self.attrs = nc4io.minimal_metadata(attrs)
+        self.attrs = minimal_metadata(attrs)
 
         if metadata is None:
             # Data retrieval mode
@@ -135,9 +147,9 @@ class StationMetaData():
 
         # Create data dimensions
         dims = OrderedDict()
-        dtype = f"U{STRING_MAX_LENGTH}"
-        dims[STATIONID_DIMENSION_NAME] = \
-            metadata_typed.index.values.astype(dtype)
+
+        index = get_dataframe_index(metadata_typed)
+        dims[STATIONID_DIMENSION_NAME] = index
 
         column_dimname = column_variable_ncname(name, data_type)
         column_names = metadata_typed.columns.str\
@@ -153,11 +165,11 @@ class StationMetaData():
         elif data_type == NUMERICAL_DATA_TYPE_LABEL:
             compression = None
             fill_value = np.nan
-            numpy_dtype = nc4io.DEFAULT_NUMPY_DTYPE
+            numpy_dtype = DEFAULT_NUMPY_DTYPE
             sdigit = 7
 
         metadata_varname = station_variable_ncname(name, data_type)
-        nvar = nc4io.Variable(ncdset, metadata_varname,
+        nvar = Variable(ncdset, metadata_varname,
                        dimensions=dims,
                        units=None,
                        numpy_dtype=numpy_dtype,
@@ -182,7 +194,7 @@ class StationMetaData():
         unit_varname = unit_variable_ncname(name, data_type)
         column_dimname = column_variable_ncname(name, data_type)
         numpy_dtype = f"U{STRING_MAX_LENGTH}"
-        nvar = nc4io.Variable(ncdset, unit_varname,
+        nvar = Variable(ncdset, unit_varname,
                        dimensions=[column_dimname],
                        units=None,
                        numpy_dtype=numpy_dtype,
@@ -221,18 +233,18 @@ class StationMetaData():
         return metadata, attrs
 
 
-class StationVariable(nc4io.Variable):
+class StationVariable(Variable):
     def __init__(self, ncdset: Dataset,
                  name: str,
                  stationids: Optional[Union[list, pd.Index]] = None,
                  index: Optional[pd.Index] = None,
                  column_names: Optional[list] = None,
                  column_units: Optional[list] = None,
-                 numpy_dtype: Optional[str] = nc4io.DEFAULT_NUMPY_DTYPE,
+                 numpy_dtype: Optional[str] = DEFAULT_NUMPY_DTYPE,
                  compression: Optional[str] = "zlib",
                  chunksizes: Optional[tuple] = None,
-                 fill_value: Optional[float] = nc4io.DEFAULT_MISSING_VALUE,
-                 significant_digit: Optional[int] = nc4io.DEFAULT_SIGNIFICANT_DIGIT,
+                 fill_value: Optional[float] = DEFAULT_MISSING_VALUE,
+                 significant_digit: Optional[int] = DEFAULT_SIGNIFICANT_DIGIT,
                  attrs: Optional[dict] = None):
 
         # Storing only numerical data
@@ -316,7 +328,7 @@ class StationVariable(nc4io.Variable):
         unit_var_ncname = unit_variable_ncname(name, dtype)
         numpy_dtype = f"U{STRING_MAX_LENGTH}"
         column_units = np.array(column_units).astype(numpy_dtype)
-        unit_var = nc4io.Variable(ncdset, unit_var_ncname,
+        unit_var = Variable(ncdset, unit_var_ncname,
                                   dimensions=[colvar_ncname],
                                   compression=None,
                                   numpy_dtype=numpy_dtype)
@@ -337,7 +349,7 @@ class StationVariable(nc4io.Variable):
 
         if isinstance(data, pd.DataFrame):
             try:
-                index = nc4io.date2num(data.index)
+                index = date2num(data.index)
             except Exception:
                 index = data.index.values
 
@@ -386,8 +398,8 @@ class StationVariable(nc4io.Variable):
 
         dname = STATION_DATA_INDEX_DIMENSION_NAME
         index = read_from_nc(ncdset, dname)
-        if ncdset[dname].dimension_type == nc4io.DIMENSION_TIME_NAME:
-            index = nc4io.num2date(index)
+        if ncdset[dname].dimension_type == DIMENSION_TIME_NAME:
+            index = num2date(index)
 
         data = ncdset[variable_ncname][istation, :, :]
 

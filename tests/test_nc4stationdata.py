@@ -1,8 +1,11 @@
 import math
+import re
 from pathlib import Path
 
+import random
+import string
+
 import pytest
-from string import ascii_letters as letters
 
 import numpy as np
 np.random.seed(5446)
@@ -11,14 +14,19 @@ import pandas as pd
 from netCDF4 import Dataset
 from hyncu import nc4io, nc4stationdata as nc4sd
 
+from test_nc4io import generate_random_strings
+
 import warnings
 
 FHERE = Path(__file__).resolve().parent
 
 SEP = nc4sd.LABEL_SEPARATOR
 
+random.seed(5446)
+
 @pytest.mark.parametrize("index_type",
-                         ["time", "integer", "real", "str"])
+                         ["time", "integer", "real",
+                          "str-ascii", "str-unicode"])
 def test_dataframe(index_type):
     fnc = FHERE / f"test_dataframe_{index_type}_index.nc"
     if fnc.exists():
@@ -34,14 +42,26 @@ def test_dataframe(index_type):
             index = np.arange(100)
         elif index_type == "real":
             index = np.linspace(0, 1, 100)
-        elif index_type == "str":
-            index = ["".join([letters[i]
-                              for i in np.random.randint(0, 26, 10)])
-                                 for k in range(100)]
+        elif index_type == "str-ascii":
+            index = generate_random_strings(100, False)
+        elif index_type == "str-unicode":
+            index = generate_random_strings(100, True)
 
         dataname = "truc"
         units = ["mm.day-1", "m3.s-1", "degC", "kg"]
         attrs = {"author": "me"}
+
+        if index_type == "str-unicode":
+            msg = "Values in dimension"
+            with pytest.raises(ValueError, match=msg):
+                svar = nc4sd.StationVariable(nc, dataname,
+                                     stationids=stationids,
+                                     index=index,
+                                     column_names=variable_names,
+                                     column_units=units,
+                                     attrs=attrs)
+            return
+
         svar = nc4sd.StationVariable(nc, dataname,
                                      stationids=stationids,
                                      index=index,
@@ -112,24 +132,25 @@ def test_dataframe(index_type):
     fnc.unlink()
 
 
-def test_stations(allclose):
+@pytest.mark.parametrize("unicode", [False, True])
+def test_stations(unicode, allclose):
     fnc = FHERE / "test_dataframe_stations.nc"
     if fnc.exists():
         fnc.unlink()
 
     with Dataset(fnc, "w") as nc:
-        stations = ["a", "b", "c"]
-        variables = ["v1", "v2[m/s]", "v3[-]", "v4"]
-
+        stations = generate_random_strings(10, unicode)
+        units = ["", "[-]", "[m.s-1]", "[kg]"]
+        v = generate_random_strings(20, unicode)
+        variables = [f"{v[i]}{random.choice(units)}" for i in range(20)]
         # Random station info
         d = np.random.uniform(0, 1, (len(stations), len(variables)))
         df = pd.DataFrame(d, index=stations, columns=variables)
-        df.loc[:, "NAME"] = ["".join([letters[i] \
-                                    for i in np.random.randint(0, 26, 10)]) \
-                                        for s in stations]
-        df.loc[:, "TRUC[-]"] = ["".join([letters[i] \
-                                    for i in np.random.randint(0, 26, 10)]) \
-                                        for s in stations]
+
+        nsites = len(stations)
+        df.loc[:, "NAME"] = generate_random_strings(nsites, unicode)
+        df.loc[:, "TRUC[-]"] = generate_random_strings(nsites, unicode)
+
         with pytest.raises(ValueError, match="LONGITUDE was expected"):
             ncsta = nc4sd.StationMetaData(nc, df)
 
