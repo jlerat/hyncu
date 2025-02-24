@@ -245,6 +245,10 @@ class Variable():
         self.name = str(name)
         if re.search("S|U", numpy_dtype):
             numpy_nchar = int(re.sub("^.*(U|S)", "", numpy_dtype))
+            if numpy_nchar < 2:
+                errmess = "Number of characters should be at least 2."
+                raise ValueError(errmess)
+
             numpy_dtype = "S1"
             # Remove compression for string data
             compression = None
@@ -325,25 +329,29 @@ class Variable():
         # Case default chunksizes
         if chunksizes is None:
             try:
-                chunksizes = [len(d) for _, d in self.dimensions.items()]
+                return [len(d) for _, d in self.dimensions.items()]
             except Exception:
                 return None
 
         # Check dimensions
         # Case of string array
-        chunksizes = list(chunksizes)
+        if np.isscalar(chunksizes):
+            chunksizes = [chunksizes]
+        else:
+            chunksizes = list(chunksizes)
+
         if len(chunksizes) == len(dims) - 1\
                 and "nchars" in dims:
-            chunksizes = list(chunksizes) + [1000]
+            n = len(dims["nchars"])
+            chunksizes = list(chunksizes) + [n]
 
+        # Check chunks
         for idim, dname in enumerate(dims):
             n = len(dims[dname])
             ck = chunksizes[idim]
             if ck > n:
                 errmess = f"{idim} chunk ({ck}) bigger than data size ({n})."
                 raise ValueError(errmess)
-
-            chunksizes[idim] = min(ck, n)
 
         return chunksizes
 

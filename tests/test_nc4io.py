@@ -2,6 +2,7 @@ import math
 from pathlib import Path
 import pandas as pd
 from collections import OrderedDict
+from collections.abc import Iterable
 
 import re
 import random
@@ -328,30 +329,48 @@ def test_spatialtimevariable(time_first, allclose):
 
 
 @pytest.mark.parametrize("dtype", ["S", "U", "<S", "<U", "unicode"])
-def test_textvariable(dtype,  allclose):
+@pytest.mark.parametrize("size", [(100, 50), 100])
+@pytest.mark.parametrize("nchar", [1, 2, 10, 100])
+def test_textvariable(dtype, size, nchar, allclose):
     fnc = FHERE / "test_textvariable.nc"
     if fnc.exists():
         fnc.unlink()
 
     with Dataset(fnc, "w") as nc:
         dims = OrderedDict()
-        nlons, nlats = 100, 50
-        dims["latitude"] = np.linspace(-40, -10, nlats)
-        dims["longitude"] = np.linspace(110, 140, nlons)
-        nchar = 20
+        if isinstance(size, Iterable):
+            dims["latitude"] = np.linspace(-40, -10, size[0])
+            dims["longitude"] = np.linspace(110, 140, size[1])
+        else:
+            dims["latitude"] = np.linspace(-40, -10, size)
+
         is_unicode = dtype == "unicode"
         np_dtype = f"U{nchar}" if is_unicode else f"{dtype}{nchar}"
+
+        if nchar == 1:
+            msg = "Number of characters"
+            with pytest.raises(ValueError, match=msg):
+                nvar = nc4io.Variable(nc, "bidule",
+                              dimensions=dims,
+                              numpy_dtype=np_dtype,
+                              units="mm.month-1")
+            return
+
         nvar = nc4io.Variable(nc, "bidule",
                               dimensions=dims,
                               numpy_dtype=np_dtype,
                               units="mm.month-1")
 
-        nlats = len(dims["latitude"])
-        nlons = len(dims["longitude"])
         unicode = 2 if is_unicode else 0
-        data = [generate_random_strings(nlons, unicode,
-                                        maxlength=nchar)
-                for la in range(nlats)]
+        if isinstance(size, Iterable):
+            data = [generate_random_strings(size[1], unicode,
+                                            minlength=min(5, nchar),
+                                            maxlength=nchar)
+                                            for la in range(size[0])]
+        else:
+            data = generate_random_strings(size,
+                                           minlength=min(5, nchar),
+                                           maxlength=nchar).squeeze()
         data = np.array(data)
         if dtype != "unicode":
             data = data.astype(dtype)
@@ -359,10 +378,15 @@ def test_textvariable(dtype,  allclose):
         nvar.write_data_to_dataset(data)
 
         # Write data subset
-        idx = np.arange(3), np.arange(3)
         st = "xxx"
+        if isinstance(size, Iterable):
+            idx = np.arange(3), np.arange(3)
+            data[idx[0][:, None], idx[1][None, :]] = st
+        else:
+            idx = np.arange(3)
+            data[idx] = st
+
         nvar.write_data_to_dataset(st, idx)
-        data[idx[0][:, None], idx[1][None, :]] = st
 
     with Dataset(fnc, "r") as nc:
         d = nc["bidule"][:]
