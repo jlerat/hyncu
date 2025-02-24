@@ -12,7 +12,6 @@ import cf_units
 
 import netCDF4
 from netCDF4 import Dataset
-from netCDF4 import stringtochar
 
 TIME_DIMENSION_TYPE_LABEL = "time"
 SPATIAL_DIMENSION_TYPE_LABEL = "spatial"
@@ -60,17 +59,20 @@ def date2num(times: pd.DatetimeIndex) -> np.ndarray:
 def remove_non_ascii_element(s):
     return "".join(filter(lambda x: ord(x) < 128, s))
 
+
 remove_non_ascii_vectorized = np.vectorize(remove_non_ascii_element)
+
 
 def is_ascii_element(s):
     return all(ord(c) < 128 for c in s)
+
 
 is_ascii_vectorised = np.vectorize(is_ascii_element)
 
 
 class Dimension():
     def __init__(self, name: str, values: np.ndarray,
-                 numpy_dtype: Union[str, numpy.dtype],
+                 numpy_dtype: Union[str, np.dtype],
                  units: str):
         self.name = str(name)
         self.numpy_dtype = np.dtype(numpy_dtype)
@@ -155,7 +157,8 @@ class SpatialDimension(Dimension):
         numpy_dtype = np.float64
         units = "degrees_east" if name == DIMENSION_LONGITUDE_NAME\
                 else "degrees_north"
-        super(SpatialDimension, self).__init__(name, values, numpy_dtype, units)
+        super(SpatialDimension, self).__init__(name, values,
+                                               numpy_dtype, units)
         self.dimension_type = SPATIAL_DIMENSION_TYPE_LABEL
 
     @classmethod
@@ -311,7 +314,7 @@ class Variable():
                 # dimensions is dict-like, hence we
                 # can get values
                 dims[dname] = dimensions[dname]
-            except:
+            except Exception:
                 # dimesions is list-like
                 dims[dname] = None
 
@@ -368,12 +371,12 @@ class Variable():
         sdigit = self.significant_digit
 
         var = self.ncdset.createVariable(varname=self.name,
-                                dimensions=dims,
-                                datatype=self.numpy_dtype,
-                                chunksizes=self.chunksizes,
-                                least_significant_digit=sdigit,
-                                compression=self.compression,
-                                fill_value=self.fill_value)
+                                         dimensions=dims,
+                                         datatype=self.numpy_dtype,
+                                         chunksizes=self.chunksizes,
+                                         least_significant_digit=sdigit,
+                                         compression=self.compression,
+                                         fill_value=self.fill_value)
 
         # Set char attributes if we are dealing with strings
         # See https://unidata.github.io/netcdf4-python
@@ -390,7 +393,8 @@ class Variable():
             setattr(var, str(key), val)
 
     def write_data_to_dataset(self, data: np.ndarray,
-                              subset_index: Optional[Union[list, tuple, np.ndarray]] = None):
+                              subset_index:
+                              Optional[Union[list, tuple, np.ndarray]] = None):
         ncvar = self.ncdset[self.name]
         data = np.array(data)
         if self.numpy_nchar > 0:

@@ -1,6 +1,6 @@
 """Utility functions to export netcdf files """
 from __future__ import annotations
-from typing import Optional
+from typing import Optional, Union
 import re
 from collections import OrderedDict
 
@@ -109,7 +109,7 @@ def dataframe_items_to_dimensions(df):
     index = remove_non_ascii_vectorized(index)
 
     columns = df.columns.str\
-                     .replace("\\[.*", "", regex=True)
+        .replace("\\[.*", "", regex=True)
     columns = columns.values.astype(dtype)
     columns = remove_non_ascii_vectorized(columns)
     return index, columns
@@ -175,13 +175,13 @@ class StationMetaData():
 
         metadata_varname = station_variable_ncname(name, data_type)
         nvar = Variable(ncdset, metadata_varname,
-                       dimensions=dims,
-                       units=None,
-                       numpy_dtype=numpy_dtype,
-                       compression=compression,
-                       fill_value=fill_value,
-                       significant_digit=sdigit,
-                       attrs=self.attrs)
+                        dimensions=dims,
+                        units=None,
+                        numpy_dtype=numpy_dtype,
+                        compression=compression,
+                        fill_value=fill_value,
+                        significant_digit=sdigit,
+                        attrs=self.attrs)
         nvar.write_data_to_dataset(metadata_typed)
 
     def write_metadata_units_to_dataset(self, data_type):
@@ -191,8 +191,8 @@ class StationMetaData():
 
         # Extract units from columns
         metadata_units = [re.sub(".*\\[|\\]$", "", cn)
-                              if re.search("\\[", cn) else ""
-                              for cn in metadata_typed.columns]
+                          if re.search("\\[", cn) else ""
+                          for cn in metadata_typed.columns]
         metadata_units = np.array(metadata_units)
 
         # Create unit variable
@@ -200,12 +200,12 @@ class StationMetaData():
         column_dimname = column_variable_ncname(name, data_type)
         numpy_dtype = f"U{STRING_MAX_LENGTH}"
         nvar = Variable(ncdset, unit_varname,
-                       dimensions=[column_dimname],
-                       units=None,
-                       numpy_dtype=numpy_dtype,
-                       compression=None,
-                       fill_value=None,
-                       significant_digit=None)
+                        dimensions=[column_dimname],
+                        units=None,
+                        numpy_dtype=numpy_dtype,
+                        compression=None,
+                        fill_value=None,
+                        significant_digit=None)
         nvar.write_data_to_dataset(metadata_units)
 
     def read_metadata_from_dataset(self):
@@ -335,13 +335,13 @@ class StationVariable(Variable):
         numpy_dtype = f"U{STRING_MAX_LENGTH}"
         column_units = np.array(column_units).astype(numpy_dtype)
         unit_var = Variable(ncdset, unit_var_ncname,
-                                  dimensions=[colvar_ncname],
-                                  compression=None,
-                                  numpy_dtype=numpy_dtype)
+                            dimensions=[colvar_ncname],
+                            compression=None,
+                            numpy_dtype=numpy_dtype)
         unit_var.write_data_to_dataset(column_units)
 
     def write_data_for_single_station(self, stationid: str,
-                                  data: pd.DataFrame) -> None:
+                                      data: pd.DataFrame) -> None:
         name = self.name
         dtype = self.data_type
         ncdset = self.ncdset
@@ -363,7 +363,8 @@ class StationVariable(Variable):
             iindex_nc, iindex_data = \
                 get_item_index_from_dimension(ncdset, dname, index)
 
-            column_names = [re.sub("\\[.*", "", cn) for cn in data.columns.values]
+            column_names = [re.sub("\\[.*", "", cn)
+                            for cn in data.columns.values]
             dname = column_variable_ncname(name, dtype)
             ivars_nc, ivars_data = \
                 get_item_index_from_dimension(ncdset, dname, column_names)
