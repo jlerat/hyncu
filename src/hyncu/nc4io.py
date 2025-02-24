@@ -259,6 +259,8 @@ class Variable():
         self.units = units
 
         # Build dimensions
+        if dimensions is None and self.name in self.ncdset.variables:
+            dimensions = self.ncdset[self.name].dimensions
         self.dimensions = self.build_dimensions(dimensions)
 
         if significant_digit is not None and numpy_nchar == 0:
@@ -281,12 +283,20 @@ class Variable():
             self.write_variable_to_dataset()
 
     def build_dimensions(self, dimensions):
-        if isinstance(dimensions, OrderedDict):
-            dims = dimensions
-        else:
-            dims = OrderedDict()
-            for n in dimensions:
-                dims[n] = None
+        dims = OrderedDict()
+        for dname in dimensions:
+            if dname in self.ncdset.variables:
+                if dname == DIMENSION_TIME_NAME:
+                    times = self.ncdset[dname]
+                    dims[dname] = num2date(times[:], times.units)
+                else:
+                    dims[dname] = self.ncdset[dname][:]
+                continue
+
+            try:
+                dims[dname] = dimensions[dname]
+            except:
+                dims[dname] = None
 
         if self.numpy_nchar > 0:
             nchars = np.arange(self.numpy_nchar)

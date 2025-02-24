@@ -259,6 +259,10 @@ def test_variable(compression, fill_value, chunksizes, allclose):
         for n in ["latitude", "longitude"]:
             assert allclose(nvar.dimensions[n], dims[n])
 
+        nvar = nc4io.Variable(nc, "bidule")
+        for dname in nvar.dimensions:
+            assert allclose(nvar.dimensions[dname],
+                            dims[dname])
     fnc.unlink()
 
 
