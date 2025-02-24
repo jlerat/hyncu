@@ -247,7 +247,7 @@ def test_variable(compression, fill_value, chunksizes, allclose):
         else:
             assert v._FillValue == fill_value
         if chunksizes is None:
-            assert v.chunking() in ["contiguous", [365, 10, 10]]
+            assert v.chunking() == [365, 10, 10]
         else:
             assert allclose(v.chunking(), chunksizes)
 

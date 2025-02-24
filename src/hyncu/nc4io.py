@@ -273,7 +273,10 @@ class Variable():
             self.fill_value = self.numpy_dtype.type(fill_value)
         except AttributeError:
             self.fill_value = "-"
-        self.chunksizes = chunksizes
+
+        # Get chunksizes
+        self.chunksizes = self.build_chunksizes(chunksizes)
+
         self.attrs = minimal_metadata(attrs)
 
         # Create dimensions and variables if needed
@@ -313,6 +316,36 @@ class Variable():
             dims[DIMENSION_NCHARS_NAME] = nchars
 
         return dims
+
+    def build_chunksizes(self, chunksizes):
+        dims = self.dimensions
+        if dims is None:
+            return chunksizes
+
+        # Case default chunksizes
+        if chunksizes is None:
+            try:
+                chunksizes = [len(d) for _, d in self.dimensions.items()]
+            except Exception:
+                return None
+
+        # Check dimensions
+        # Case of string array
+        chunksizes = list(chunksizes)
+        if len(chunksizes) == len(dims) - 1\
+                and "nchars" in dims:
+            chunksizes = list(chunksizes) + [1000]
+
+        for idim, dname in enumerate(dims):
+            n = len(dims[dname])
+            ck = chunksizes[idim]
+            if ck > n:
+                errmess = f"{idim} chunk ({ck}) bigger than data size ({n})."
+                raise ValueError(errmess)
+
+            chunksizes[idim] = min(ck, n)
+
+        return chunksizes
 
     def write_dimensions_to_dataset(self):
         for dname, dvalue in self.dimensions.items():
