@@ -299,7 +299,8 @@ def test_spatialvariable(allclose):
     fnc.unlink()
 
 
-def test_spatialtimevariable(allclose):
+@pytest.mark.parametrize("time_first", [True, False])
+def test_spatialtimevariable(time_first, allclose):
     fnc = FHERE / "test_spatialtimevariable.nc"
     if fnc.exists():
         fnc.unlink()
@@ -308,8 +309,12 @@ def test_spatialtimevariable(allclose):
         lons = np.linspace(110, 140, 10)
         lats = np.linspace(-40, -10, 10)
         times = pd.date_range("2001-01-01", "2001-04-30")
-        nvar = nc4io.SpatialTimeVariable(nc, "bidule", lons, lats, times)
-        data = np.random.uniform(size=(len(lats), len(lons), len(times)))
+        nvar = nc4io.SpatialTimeVariable(nc, "bidule", lons, lats, times,
+                                         time_first=time_first)
+        if time_first:
+            data = np.random.uniform(size=(len(times), len(lats), len(lons)))
+        else:
+            data = np.random.uniform(size=(len(lats), len(lons), len(times)))
         nvar.write_data_to_dataset(data)
 
     with Dataset(fnc, "r") as nc:

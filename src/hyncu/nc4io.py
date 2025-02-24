@@ -404,6 +404,7 @@ class SpatialTimeVariable(Variable):
                  latitudes: np.ndarray,
                  times: np.ndarray,
                  units: Optional[str] = "-",
+                 time_first=True,
                  numpy_dtype: Optional[str] = DEFAULT_NUMPY_DTYPE,
                  compression: Optional[str] = "zlib",
                  chunksizes: Optional[tuple] = None,
@@ -415,13 +416,23 @@ class SpatialTimeVariable(Variable):
         if longitudes is not None and latitudes is not None \
                 and times is not None:
             dims = OrderedDict()
-            dims[DIMENSION_LATITUDE_NAME] = latitudes
-            dims[DIMENSION_LONGITUDE_NAME] = longitudes
-            dims[DIMENSION_TIME_NAME] = times
+            if time_first:
+                dims[DIMENSION_TIME_NAME] = times
+                dims[DIMENSION_LATITUDE_NAME] = latitudes
+                dims[DIMENSION_LONGITUDE_NAME] = longitudes
+            else:
+                dims[DIMENSION_LATITUDE_NAME] = latitudes
+                dims[DIMENSION_LONGITUDE_NAME] = longitudes
+                dims[DIMENSION_TIME_NAME] = times
         else:
-            dims = [DIMENSION_LATITUDE_NAME,
-                    DIMENSION_LONGITUDE_NAME,
-                    DIMENSION_TIME_NAME]
+            if time_first:
+                dims = [DIMENSION_TIME_NAME,
+                        DIMENSION_LATITUDE_NAME,
+                        DIMENSION_LONGITUDE_NAME]
+            else:
+                dims = [DIMENSION_LATITUDE_NAME,
+                        DIMENSION_LONGITUDE_NAME,
+                        DIMENSION_TIME_NAME]
 
         super(SpatialTimeVariable, self).__init__(ncdset, name,
                                                   dimensions=dims,
