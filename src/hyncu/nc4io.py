@@ -285,17 +285,27 @@ class Variable():
     def build_dimensions(self, dimensions):
         dims = OrderedDict()
         for dname in dimensions:
+            # dimensions is present in netcdf Dataset
             if dname in self.ncdset.variables:
                 if dname == DIMENSION_TIME_NAME:
                     times = self.ncdset[dname]
                     dims[dname] = num2date(times[:], times.units)
                 else:
-                    dims[dname] = self.ncdset[dname][:]
+                    dim_values = self.ncdset[dname][:]
+                    if str(dim_values.dtype) == "object":
+                        dtype = f"U{STRING_MAX_LENGTH}"
+                        dim_values = dim_values.astype(dtype)
+
+                    dims[dname] = dim_values
+
                 continue
 
             try:
+                # dimensions is dict-like, hence we
+                # can get values
                 dims[dname] = dimensions[dname]
             except:
+                # dimesions is list-like
                 dims[dname] = None
 
         if self.numpy_nchar > 0:

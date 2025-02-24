@@ -207,7 +207,7 @@ def test_add_generic_dimensions(allclose):
 
 @pytest.mark.parametrize("compression", [None, "zlib"])
 @pytest.mark.parametrize("fill_value", [None, -999.])
-@pytest.mark.parametrize("chunksizes", [None, (2, 2)])
+@pytest.mark.parametrize("chunksizes", [None, (1, 2, 2)])
 def test_variable(compression, fill_value, chunksizes, allclose):
     fnc = FHERE / "test_variable.nc"
     if fnc.exists():
@@ -215,6 +215,7 @@ def test_variable(compression, fill_value, chunksizes, allclose):
 
     with Dataset(fnc, "w") as nc:
         dims = OrderedDict()
+        dims["time"] = pd.date_range("2001-01-01", "2001-12-31")
         dims["latitude"] = np.linspace(-40, -10, 10)
         dims["longitude"] = np.linspace(110, 140, 10)
         attrs = {"comment": "bidule", "data_provider": "yo"}
@@ -226,16 +227,18 @@ def test_variable(compression, fill_value, chunksizes, allclose):
                               chunksizes=chunksizes,
                               attrs=attrs)
 
+        ntimes = len(dims["time"])
         nlats = len(dims["latitude"])
         nlons = len(dims["longitude"])
-        data = np.random.uniform(size=(nlats, nlons))
-        data.flat[:5] = np.nan
+        data = np.random.uniform(size=(ntimes, nlats, nlons))
+        data[0, :5, :5] = np.nan
         nvar.write_data_to_dataset(data)
 
         # Write data subset
-        idx = np.arange(3), np.arange(3)
+        idx = np.array([0]), np.arange(3), np.arange(3)
         nvar.write_data_to_dataset(-999, idx)
-        data[idx[0][:, None], idx[1][None, :]] = -999
+        data[idx[0][:, None, None], idx[1][None, :, None],
+             idx[2][None, None, :]] = -999
 
     with Dataset(fnc, "r") as nc:
         v = nc["bidule"]
@@ -244,15 +247,17 @@ def test_variable(compression, fill_value, chunksizes, allclose):
         else:
             assert v._FillValue == fill_value
         if chunksizes is None:
-            assert v.chunking() in ["contiguous", [10, 10]]
+            assert v.chunking() in ["contiguous", [365, 10, 10]]
         else:
             assert allclose(v.chunking(), chunksizes)
+
         assert v.comment == "bidule"
         assert v.data_provider == "yo"
-        assert len(v.author)>0
-        assert len(v.version)>0
-        assert len(v.source_file)>0
+        assert len(v.author) > 0
+        assert len(v.version) > 0
+        assert len(v.source_file) > 0
         assert v.units == "mm.month-1"
+
         d = v[:].filled()
         assert allclose(d, data, atol=1e-5, equal_nan=True)
 
@@ -260,9 +265,15 @@ def test_variable(compression, fill_value, chunksizes, allclose):
             assert allclose(nvar.dimensions[n], dims[n])
 
         nvar = nc4io.Variable(nc, "bidule")
+        assert str(nvar.dimensions["time"].dtype) == "datetime64[ns]"
         for dname in nvar.dimensions:
-            assert allclose(nvar.dimensions[dname],
-                            dims[dname])
+            v1 = nvar.dimensions[dname]
+            v2 = dims[dname]
+            if dname != "time":
+                assert allclose(v1, v2)
+            else:
+                assert all(vv1==vv2 for vv1, vv2 in zip(v1, v2))
+
     fnc.unlink()
 
 
