@@ -81,7 +81,7 @@ class Dimension():
         if re.search("S|U", str(numpy_dtype)):
             all_ascii = np.all(is_ascii_vectorised(values))
             if not all_ascii:
-                errmess = "Values in dimension cannot be "\
+                errmess = f"Values in dimension '{name}' cannot be "\
                           + "non-ascii characters."
                 raise ValueError(errmess)
 
@@ -93,7 +93,7 @@ class Dimension():
         self.units = units
 
     def __str__(self):
-        txt = f"Dimension {self.name} [self.dimension_type]"\
+        txt = f"Dimension '{self.name}' [self.dimension_type]"\
               + f", {self.numpy_dtype}, {len(self.values)} values"
         return txt
 
@@ -114,7 +114,8 @@ class Dimension():
         try:
             var[:] = self.values
         except UnicodeEncodeError:
-            errmess = "Only ascii character accepted in dimension"
+            errmess = "Only ascii character accepted in "\
+                      + f"string dimension '{self.name}'."
             raise ValueError(errmess)
 
         var.dimension_type = self.dimension_type
@@ -150,7 +151,8 @@ class SpatialDimension(Dimension):
     def __init__(self, values: np.ndarray, name: str):
         if name not in [DIMENSION_LONGITUDE_NAME,
                         DIMENSION_LATITUDE_NAME]:
-            errmess = "Wrong dimension name."
+            errmess = "Wrong spatial dimension name"\
+                      + f" '{name}'."
             raise ValueError(errmess)
 
         values = np.array(values).astype(np.float64)
@@ -236,12 +238,12 @@ class Variable():
         # Check dataset is reasonble
         if not hasattr(ncdset, "variables") or \
                 not hasattr(ncdset, "dimensions"):
-            errmess = "Dataset does not have variables or dimensions"
+            errmess = f"Dataset '{name}' does not have variables or dimensions"
             raise ValueError(errmess)
 
         if ncdset.file_format not in ["NETCDF4", "NETCDF4_CLASSIC"]:
             errmess = "Need NETCDF4 or NETCDF4_CLASSIC Dataset"\
-                      + f" file format, got {ncdset.file_format}."
+                      + f" file format, got '{ncdset.file_format}'."
             raise ValueError(errmess)
 
         self.ncdset = ncdset
@@ -353,7 +355,8 @@ class Variable():
             n = len(dims[dname])
             ck = chunksizes[idim]
             if ck > n:
-                errmess = f"{idim} chunk ({ck}) bigger than data size ({n})."
+                errmess = f"chunk for dimension '{dname}' (#{idim},"\
+                          + f" len {ck}) is bigger than data size ({n})."
                 raise ValueError(errmess)
 
         return chunksizes
