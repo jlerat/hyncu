@@ -7,7 +7,10 @@ from collections import OrderedDict
 import numpy as np
 import pandas as pd
 
-import cf_units
+from hyncu import HAS_CF_UNITS
+if HAS_CF_UNITS:
+    import cf_units
+
 from netCDF4 import Dataset
 
 from hyncu.nc4io import STRING_MAX_LENGTH
@@ -35,6 +38,9 @@ LABEL_SEPARATOR = "."
 
 
 def validate_units(units: list) -> None:
+    if not HAS_CF_UNITS:
+        return
+
     for unit in units:
         try:
             cf_units.Unit(unit)

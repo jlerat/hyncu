@@ -60,7 +60,11 @@ def test_dataframe(index_type):
                                      column_names=variable_names,
                                      column_units=units,
                                      attrs=attrs)
-            fnc.unlink()
+
+            try:
+                fnc.unlink()
+            except:
+                pass
             return
 
         svar = nc4sd.StationVariable(nc, dataname,

@@ -8,7 +8,10 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from datetime import datetime
-import cf_units
+
+from hyncu import HAS_CF_UNITS
+if HAS_CF_UNITS:
+    import cf_units
 
 import netCDF4
 from netCDF4 import Dataset
@@ -89,7 +92,9 @@ class Dimension():
         self.dimension_type = GENERIC_DIMENSION_TYPE_LABEL
 
         # Check unit
-        cf_units.Unit(units)
+        if HAS_CF_UNITS:
+            cf_units.Unit(units)
+
         self.units = units
 
     def __str__(self):
@@ -264,7 +269,8 @@ class Variable():
         self.numpy_nchar = numpy_nchar
 
         # Check units
-        cf_units.Unit(units)
+        if HAS_CF_UNITS:
+            cf_units.Unit(units)
         self.units = units
 
         # Build dimensions
