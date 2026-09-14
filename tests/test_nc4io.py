@@ -264,7 +264,7 @@ def test_variable(compression, fill_value, chunksizes, allclose):
             assert allclose(nvar.dimensions[n], dims[n])
 
         nvar = nc4io.Variable(nc, "bidule")
-        assert str(nvar.dimensions["time"].dtype) == "datetime64[ns]"
+        assert str(nvar.dimensions["time"].dtype) == "datetime64[us]"
         for dname in nvar.dimensions:
             v1 = nvar.dimensions[dname]
             v2 = dims[dname]
