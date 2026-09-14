@@ -1,15 +1,18 @@
 """Utility functions to export netcdf files """
 from __future__ import annotations
+
 import re
 from collections import OrderedDict
-from typing import Optional, Union
+from datetime import datetime
 from getpass import getuser
 from pathlib import Path
+from typing import Optional, Union
+
 import numpy as np
 import pandas as pd
-from datetime import datetime
 
 from hyncu import HAS_CF_UNITS
+
 if HAS_CF_UNITS:
     import cf_units
 
@@ -73,7 +76,7 @@ def is_ascii_element(s):
 is_ascii_vectorised = np.vectorize(is_ascii_element)
 
 
-class Dimension():
+class Dimension:
     def __init__(self, name: str, values: np.ndarray,
                  numpy_dtype: Union[str, np.dtype],
                  units: str):
@@ -142,7 +145,7 @@ class TimeDimension(Dimension):
         numpy_dtype = TIME_NUMPY_DTYPE
         units = TIME_UNITS
         values = date2num(pd.to_datetime(times))
-        super(TimeDimension, self).__init__(name, values, numpy_dtype, units)
+        super().__init__(name, values, numpy_dtype, units)
         self.dimension_type = TIME_DIMENSION_TYPE_LABEL
 
     @classmethod
@@ -164,7 +167,7 @@ class SpatialDimension(Dimension):
         numpy_dtype = np.float64
         units = "degrees_east" if name == DIMENSION_LONGITUDE_NAME\
                 else "degrees_north"
-        super(SpatialDimension, self).__init__(name, values,
+        super().__init__(name, values,
                                                numpy_dtype, units)
         self.dimension_type = SPATIAL_DIMENSION_TYPE_LABEL
 
@@ -228,7 +231,7 @@ def minimal_metadata(attrs: Optional[dict] = None):
     return attrs
 
 
-class Variable():
+class Variable:
     def __init__(self, ncdset: Dataset,
                  name: str,
                  dimensions: Optional[Union[list, OrderedDict]] = None,
@@ -441,7 +444,7 @@ class SpatialVariable(Variable):
             dims = [DIMENSION_LATITUDE_NAME,
                     DIMENSION_LONGITUDE_NAME]
 
-        super(SpatialVariable, self).__init__(ncdset, name,
+        super().__init__(ncdset, name,
                                               dimensions=dims,
                                               units=units,
                                               numpy_dtype=numpy_dtype,
@@ -488,7 +491,7 @@ class SpatialTimeVariable(Variable):
                         DIMENSION_LONGITUDE_NAME,
                         DIMENSION_TIME_NAME]
 
-        super(SpatialTimeVariable, self).__init__(ncdset, name,
+        super().__init__(ncdset, name,
                                                   dimensions=dims,
                                                   units=units,
                                                   numpy_dtype=numpy_dtype,

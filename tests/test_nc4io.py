@@ -1,22 +1,20 @@
-import math
-from pathlib import Path
-import pandas as pd
+import random
+import re
+import string
 from collections import OrderedDict
 from collections.abc import Iterable
-
-import re
-import random
-import string
-
-import pytest
+from pathlib import Path
 
 import numpy as np
+import pandas as pd
+import pytest
+
 np.random.seed(5446)
 
-from netCDF4 import Dataset
-from hyncu import nc4io
 
-import warnings
+from netCDF4 import Dataset
+
+from hyncu import nc4io
 
 FHERE = Path(__file__).resolve().parent
 
@@ -266,7 +264,7 @@ def test_variable(compression, fill_value, chunksizes, allclose):
             assert allclose(nvar.dimensions[n], dims[n])
 
         nvar = nc4io.Variable(nc, "bidule")
-        assert str(nvar.dimensions["time"].dtype) == "datetime64[ns]"
+        assert str(nvar.dimensions["time"].dtype) == "datetime64[us]"
         for dname in nvar.dimensions:
             v1 = nvar.dimensions[dname]
             v2 = dims[dname]

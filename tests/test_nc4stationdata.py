@@ -1,22 +1,16 @@
-import math
-import re
+import random
 from pathlib import Path
 
-import random
-import string
-
+import numpy as np
 import pytest
 
-import numpy as np
 np.random.seed(5446)
+
 import pandas as pd
-
 from netCDF4 import Dataset
-from hyncu import nc4io, nc4stationdata as nc4sd
-
 from test_nc4io import generate_random_strings
 
-import warnings
+from hyncu import nc4stationdata as nc4sd
 
 FHERE = Path(__file__).resolve().parent
 
