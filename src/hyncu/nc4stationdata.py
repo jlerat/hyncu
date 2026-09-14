@@ -1,28 +1,32 @@
 """Utility functions to export netcdf files """
 from __future__ import annotations
-from typing import Optional, Union
+
 import re
 from collections import OrderedDict
+from typing import Optional, Union
 
 import numpy as np
 import pandas as pd
 
 from hyncu import HAS_CF_UNITS
+
 if HAS_CF_UNITS:
     import cf_units
 
 from netCDF4 import Dataset
 
-from hyncu.nc4io import STRING_MAX_LENGTH
-from hyncu.nc4io import DEFAULT_NUMPY_DTYPE
-from hyncu.nc4io import DEFAULT_MISSING_VALUE
-from hyncu.nc4io import DEFAULT_SIGNIFICANT_DIGIT
-from hyncu.nc4io import DIMENSION_TIME_NAME
-from hyncu.nc4io import date2num
-from hyncu.nc4io import num2date
-from hyncu.nc4io import minimal_metadata
-from hyncu.nc4io import Variable
-from hyncu.nc4io import remove_non_ascii_vectorized
+from hyncu.nc4io import (
+    DEFAULT_MISSING_VALUE,
+    DEFAULT_NUMPY_DTYPE,
+    DEFAULT_SIGNIFICANT_DIGIT,
+    DIMENSION_TIME_NAME,
+    STRING_MAX_LENGTH,
+    Variable,
+    date2num,
+    minimal_metadata,
+    num2date,
+    remove_non_ascii_vectorized,
+)
 
 TEXT_DATA_TYPE_LABEL = "text"
 NUMERICAL_DATA_TYPE_LABEL = "numerical"
@@ -121,7 +125,7 @@ def dataframe_items_to_dimensions(df):
     return index, columns
 
 
-class StationMetaData():
+class StationMetaData:
     def __init__(self, ncdset: Dataset,
                  metadata: Optional[pd.DataFrame] = None,
                  name: Optional[str] = DEFAULT_STATION_DATASET_NAME,
@@ -284,7 +288,7 @@ class StationVariable(Variable):
         # Initialise station variable
         var_ncname = station_variable_ncname(name, dtype)
         sdigit = significant_digit
-        super(StationVariable, self).__init__(ncdset, var_ncname,
+        super().__init__(ncdset, var_ncname,
                                               dimensions=dims,
                                               units="-",
                                               numpy_dtype=numpy_dtype,

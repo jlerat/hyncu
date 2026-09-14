@@ -6,4 +6,3 @@ try:
 except ImportError:
     HAS_CF_UNITS = False
 
-__version__ = "1.0"

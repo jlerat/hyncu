@@ -1,18 +1,16 @@
-import math
 from pathlib import Path
 from string import ascii_letters as letters
-import pandas as pd
-
-import pytest
 
 import numpy as np
+import pandas as pd
+
 np.random.seed(5446)
 
+
 from netCDF4 import Dataset
+
 from hyncu import nc4io
 from hyncu import nc4stationdata as nc4sd
-
-import warnings
 
 FHERE = Path(__file__).resolve().parent
 

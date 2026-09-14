@@ -20,3 +20,4 @@ hyncu.egg-info
 nosetests.xml
 junit
 tests/*.zip
+tests/*.nc
